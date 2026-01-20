@@ -5,7 +5,51 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// City allocation rules based on typical visit patterns
+// ============================================
+// SIMPLE RATE LIMITING (In-Memory)
+// ============================================
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT = 5; // requests per day
+const RATE_LIMIT_WINDOW = 24 * 60 * 60 * 1000; // 24 hours in ms
+
+function getRateLimitKey(request: NextRequest): string {
+  // Get IP from various headers (Vercel/Cloudflare)
+  const forwarded = request.headers.get("x-forwarded-for");
+  const realIp = request.headers.get("x-real-ip");
+  const ip = forwarded?.split(",")[0] || realIp || "unknown";
+  return ip;
+}
+
+function checkRateLimit(key: string): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const record = rateLimitMap.get(key);
+
+  // Clean up old entries periodically
+  if (rateLimitMap.size > 10000) {
+    for (const [k, v] of rateLimitMap.entries()) {
+      if (now > v.resetTime) {
+        rateLimitMap.delete(k);
+      }
+    }
+  }
+
+  if (!record || now > record.resetTime) {
+    // First request or window expired
+    rateLimitMap.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    return { allowed: true, remaining: RATE_LIMIT - 1 };
+  }
+
+  if (record.count >= RATE_LIMIT) {
+    return { allowed: false, remaining: 0 };
+  }
+
+  record.count++;
+  return { allowed: true, remaining: RATE_LIMIT - record.count };
+}
+
+// ============================================
+// CITY ALLOCATION RULES
+// ============================================
 const cityAllocationRules: Record<string, { min: number; max: number; weight: number }> = {
   tokyo: { min: 3, max: 7, weight: 3 },
   kyoto: { min: 2, max: 5, weight: 2.5 },
@@ -21,7 +65,6 @@ const cityAllocationRules: Record<string, { min: number; max: number; weight: nu
   okinawa: { min: 3, max: 5, weight: 2 },
 };
 
-// Airport to starting city mapping
 const airportCityMap: Record<string, string> = {
   NRT: "tokyo",
   HND: "tokyo", 
@@ -32,7 +75,30 @@ const airportCityMap: Record<string, string> = {
   OKA: "okinawa",
 };
 
+// ============================================
+// MAIN API HANDLER
+// ============================================
 export async function POST(request: NextRequest) {
+  // Check rate limit
+  const rateLimitKey = getRateLimitKey(request);
+  const { allowed, remaining } = checkRateLimit(rateLimitKey);
+
+  if (!allowed) {
+    return NextResponse.json(
+      { 
+        error: "Rate limit exceeded. You can generate up to 5 itineraries per day. Please try again tomorrow.",
+        retryAfter: "24 hours"
+      },
+      { 
+        status: 429,
+        headers: {
+          "X-RateLimit-Limit": RATE_LIMIT.toString(),
+          "X-RateLimit-Remaining": "0",
+        }
+      }
+    );
+  }
+
   try {
     const formData = await request.json();
 
@@ -221,18 +287,15 @@ RULES:
     // Clean and parse JSON
     let itineraryData;
     try {
-      // Remove any potential markdown code blocks
       let cleanedContent = textContent
         .replace(/```json\s*/g, "")
         .replace(/```\s*/g, "")
         .trim();
       
-      // Remove JavaScript comments
       cleanedContent = cleanedContent
         .replace(/\/\/.*$/gm, "")
         .replace(/\/\*[\s\S]*?\*\//g, "");
       
-      // Find the JSON object
       const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error("No JSON found in response");
@@ -245,7 +308,13 @@ RULES:
       throw new Error("Failed to parse itinerary JSON");
     }
 
-    return NextResponse.json(itineraryData);
+    // Return with rate limit headers
+    return NextResponse.json(itineraryData, {
+      headers: {
+        "X-RateLimit-Limit": RATE_LIMIT.toString(),
+        "X-RateLimit-Remaining": remaining.toString(),
+      }
+    });
   } catch (error) {
     console.error("Error generating itinerary:", error);
     return NextResponse.json(
