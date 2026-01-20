@@ -1,7 +1,52 @@
-"use client";
+\"use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+
+// Klook Affiliate ID
+const KLOOK_AID = "109190";
+
+// Keywords that should show Klook booking link
+const KLOOK_KEYWORDS = [
+  { keywords: ["teamlab", "team lab"], searchTerm: "teamlab tokyo" },
+  { keywords: ["skytree", "sky tree"], searchTerm: "tokyo skytree" },
+  { keywords: ["tokyo tower"], searchTerm: "tokyo tower" },
+  { keywords: ["disneysea", "disney sea"], searchTerm: "tokyo disneysea" },
+  { keywords: ["disneyland"], searchTerm: "tokyo disneyland" },
+  { keywords: ["universal studios", "usj"], searchTerm: "universal studios japan" },
+  { keywords: ["aquarium", "kaiyukan"], searchTerm: "osaka aquarium" },
+  { keywords: ["jr pass", "rail pass"], searchTerm: "jr pass" },
+  { keywords: ["ghibli museum"], searchTerm: "ghibli museum" },
+  { keywords: ["shibuya sky"], searchTerm: "shibuya sky" },
+  { keywords: ["cup noodle museum", "cup noodles museum"], searchTerm: "cup noodle museum" },
+  { keywords: ["robot restaurant"], searchTerm: "robot restaurant" },
+  { keywords: ["samurai museum"], searchTerm: "samurai museum tokyo" },
+  { keywords: ["kimono rental", "kimono experience"], searchTerm: "kimono rental kyoto" },
+  { keywords: ["tea ceremony"], searchTerm: "tea ceremony kyoto" },
+  { keywords: ["sumo"], searchTerm: "sumo tokyo" },
+  { keywords: ["cooking class"], searchTerm: "cooking class japan" },
+  { keywords: ["mount fuji", "mt fuji", "mt. fuji"], searchTerm: "mount fuji day trip" },
+  { keywords: ["hakone"], searchTerm: "hakone day trip" },
+  { keywords: ["nara park", "nara day trip"], searchTerm: "nara day trip" },
+  { keywords: ["fushimi inari tour"], searchTerm: "fushimi inari tour" },
+  { keywords: ["arashiyama"], searchTerm: "arashiyama tour" },
+  { keywords: ["nintendo"], searchTerm: "nintendo kyoto" },
+  { keywords: ["onsen", "hot spring"], searchTerm: "onsen japan" },
+];
+
+function getKlookLink(activityName: string): string | null {
+  const nameLower = activityName.toLowerCase();
+  
+  for (const item of KLOOK_KEYWORDS) {
+    for (const keyword of item.keywords) {
+      if (nameLower.includes(keyword)) {
+        return `https://www.klook.com/en-US/search/result/?query=${encodeURIComponent(item.searchTerm)}&aid=${KLOOK_AID}`;
+      }
+    }
+  }
+  
+  return null;
+}
 
 interface Activity {
   time?: string;
@@ -22,9 +67,7 @@ interface DayPlan {
   date: string;
   city: string;
   theme: string;
-  // New format
   activities?: Activity[];
-  // Old format
   morning?: Activity;
   lunch?: Activity;
   afternoon?: Activity;
@@ -43,14 +86,11 @@ interface Itinerary {
   tips?: string[];
 }
 
-// Helper function to convert old format to activities array
 function getActivities(day: DayPlan): Activity[] {
-  // If activities array exists, use it
   if (day.activities && Array.isArray(day.activities)) {
     return day.activities;
   }
   
-  // Otherwise, convert old format to activities array
   const activities: Activity[] = [];
   
   if (day.morning) {
@@ -103,7 +143,7 @@ export default function ResultPage() {
         }
 
         const data = await response.json();
-        console.log("Received itinerary data:", data); // Debug log
+        console.log("Received itinerary data:", data);
         setItinerary(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
@@ -298,6 +338,9 @@ function ActivityCard({ activity }: { activity: Activity }) {
   const isFood = activity.type === "food" || !!activity.cuisine;
   const tip = activity.tip || activity.localTip;
   const price = activity.price || activity.priceRange || activity.cost;
+  
+  // Check if this activity has a Klook link
+  const klookLink = !isFood ? getKlookLink(activity.name) : null;
 
   return (
     <div className={`border-l-4 ${isFood ? "border-orange-400" : "border-red-400"} pl-4 py-2`}>
@@ -333,6 +376,18 @@ function ActivityCard({ activity }: { activity: Activity }) {
           <span>💡</span>
           <span>{tip}</span>
         </p>
+      )}
+      
+      {/* Klook Booking Link */}
+      {klookLink && (
+        <a
+          href={klookLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 mt-3 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition"
+        >
+          🎫 Book on Klook
+        </a>
       )}
     </div>
   );
