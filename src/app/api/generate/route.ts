@@ -5,6 +5,33 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// City allocation rules based on typical visit patterns
+const cityAllocationRules: Record<string, { min: number; max: number; weight: number }> = {
+  tokyo: { min: 3, max: 7, weight: 3 },
+  kyoto: { min: 2, max: 5, weight: 2.5 },
+  osaka: { min: 1, max: 3, weight: 2 },
+  nara: { min: 0.5, max: 1, weight: 0.5 },
+  hiroshima: { min: 1, max: 2, weight: 1.5 },
+  hakone: { min: 1, max: 2, weight: 1 },
+  nikko: { min: 0.5, max: 1, weight: 0.5 },
+  kanazawa: { min: 1, max: 2, weight: 1.5 },
+  takayama: { min: 1, max: 2, weight: 1 },
+  fukuoka: { min: 1, max: 3, weight: 1.5 },
+  sapporo: { min: 2, max: 4, weight: 2 },
+  okinawa: { min: 3, max: 5, weight: 2 },
+};
+
+// Airport to starting city mapping
+const airportCityMap: Record<string, string> = {
+  NRT: "tokyo",
+  HND: "tokyo", 
+  KIX: "osaka",
+  NGO: "nagoya",
+  FUK: "fukuoka",
+  CTS: "sapporo",
+  OKA: "okinawa",
+};
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.json();
@@ -12,92 +39,170 @@ export async function POST(request: NextRequest) {
     const {
       startDate,
       endDate,
+      arrivalAirport,
+      arrivalTime,
+      departureAirport,
+      departureTime,
+      ageRange,
+      travelerType,
+      japanExperience,
       cities,
-      travelStyle,
+      mustVisit,
+      accommodationStyle,
+      foodStyle,
+      pace,
+      tripPurpose,
       interests,
+      morningPerson,
       englishLevel,
+      dietaryRestrictions,
+      avoidances,
       additionalNotes,
     } = formData;
 
     // Calculate number of days
     const start = new Date(startDate);
     const end = new Date(endDate);
-    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-    const prompt = `You are a Japan travel expert. Create a detailed ${days}-day itinerary for a trip to Japan.
+    // Determine starting and ending cities based on airports
+    const startCity = airportCityMap[arrivalAirport] || "tokyo";
+    const actualDepartureAirport = departureAirport === "same" ? arrivalAirport : departureAirport;
+    const endCity = airportCityMap[actualDepartureAirport] || startCity;
 
-TRIP DETAILS:
-- Dates: ${startDate} to ${endDate} (${days} days)
-- Cities: ${cities.join(", ")}
-- Travel Style: ${travelStyle}
-- Interests: ${interests.join(", ")}
-- English Requirement: ${englishLevel}
-${additionalNotes ? `- Additional Notes: ${additionalNotes}` : ""}
+    // Calculate recommended day allocation
+    const selectedCities = cities || [];
+    const cityWeights = selectedCities.map((city: string) => ({
+      city,
+      weight: cityAllocationRules[city]?.weight || 1,
+      min: cityAllocationRules[city]?.min || 1,
+      max: cityAllocationRules[city]?.max || 3,
+    }));
+    
+    const totalWeight = cityWeights.reduce((sum: number, c: { weight: number }) => sum + c.weight, 0);
 
-REQUIREMENTS:
-1. Distribute the days across the selected cities logically
-2. For each day, provide:
-   - Morning activity (sightseeing spot)
-   - Lunch recommendation (specific restaurant with name)
-   - Afternoon activity
-   - Dinner recommendation (specific restaurant with name)
-   - Evening activity (optional, based on interests)
+    // Get month for seasonal recommendations
+    const travelMonth = start.getMonth() + 1;
+    const seasonInfo = getSeasonInfo(travelMonth);
 
-3. For each activity/restaurant, include:
-   - Name (real place that exists)
-   - Brief description (1-2 sentences)
-   - Pro tip that only locals would know
-   - Approximate duration
-   - Budget indication (Free / ¥ / ¥¥ / ¥¥¥)
-   - English support level (Full English / Some English / Japanese only)
+    // Calculate day allocation
+    const dayAllocation = cityWeights.map((c: { city: string; weight: number; min: number; max: number }) => {
+      const allocatedDays = Math.round((c.weight / totalWeight) * totalDays);
+      return {
+        city: c.city,
+        days: Math.max(c.min, Math.min(c.max, allocatedDays)),
+      };
+    });
 
-4. Consider the travel style:
-   - Budget: Focus on free attractions, affordable eats, local spots
-   - Mid-range: Balance of popular spots and local gems
-   - Luxury: High-end restaurants, exclusive experiences, ryokans
+    const prompt = `Create a ${totalDays}-day Japan itinerary with DEEP LOCAL KNOWLEDGE.
 
-5. Match recommendations to interests. If they like food, emphasize restaurants. If they like nature, include gardens and parks.
+TRAVELER: ${ageRange || "adult"} | ${travelerType || "solo"} | ${japanExperience === "first" ? "First-timer (include iconic spots but with LOCAL SECRETS)" : japanExperience === "second" ? "2nd visit (mix popular with hidden gems)" : "Frequent visitor (focus on unique experiences)"}
 
-6. Consider English requirement when recommending restaurants.
+DATES: ${startDate} to ${endDate}
+ARRIVAL: ${startCity.toUpperCase()} (${arrivalTime || "afternoon"})
+DEPARTURE: ${endCity.toUpperCase()} (${departureTime || "afternoon"})
 
-RESPOND IN THIS EXACT JSON FORMAT (no markdown, just pure JSON):
+CITIES & DAYS:
+${dayAllocation.map((d: { city: string; days: number }) => `- ${d.city}: ${d.days} day(s)`).join("\n")}
+
+SEASON: ${seasonInfo}
+
+STYLE: ${accommodationStyle || "comfortable"} accommodation, ${foodStyle || "local"} food, ${pace || "moderate"} pace
+${tripPurpose ? `PURPOSE: ${tripPurpose}` : ""}
+
+INTERESTS: ${interests?.length ? interests.join(", ") : "General sightseeing"}
+${mustVisit ? `MUST VISIT: ${mustVisit}` : ""}
+${dietaryRestrictions?.length ? `DIETARY: ${dietaryRestrictions.join(", ")}` : ""}
+${avoidances?.length ? `AVOID: ${avoidances.join(", ")}` : ""}
+${additionalNotes ? `NOTES: ${additionalNotes}` : ""}
+
+═══════════════════════════════════════════════════════════════════
+CRITICAL REQUIREMENTS - READ CAREFULLY
+═══════════════════════════════════════════════════════════════════
+
+1. RESTAURANTS MUST BE SPECIFIC:
+   ❌ WRONG: "Ramen in Shinjuku", "Izakaya dinner"
+   ✅ RIGHT: "Fuunji (風雲児) in Shinjuku", "Torikizoku Shibuya"
+   → Use REAL restaurant names that exist. Include the area.
+
+2. EVERY ACTIVITY MUST HAVE A LOCAL TIP:
+   ❌ WRONG: "Visit Senso-ji Temple" (no tip)
+   ✅ RIGHT: "Senso-ji Temple" + tip: "Arrive before 7am to experience it without crowds. Enter via Nitenmon gate for a tourist-free approach."
+
+3. TIPS MUST BE SPECIFIC TO THIS TRIP:
+   ❌ WRONG: "Buy a JR Pass" (generic)
+   ✅ RIGHT: "For your Tokyo-Osaka route, the JR Pass 7-day (¥50,000) saves money vs individual tickets (¥28,000 round trip) only if you also do day trips"
+
+4. TIME OPTIMIZATION IS KEY:
+   - Include BEST TIME to visit each spot
+   - Mention crowd avoidance strategies
+   - Morning activities for popular spots
+
+═══════════════════════════════════════════════════════════════════
+
+RESPOND WITH ONLY VALID JSON. NO COMMENTS. NO MARKDOWN.
+Include ALL ${totalDays} days completely.
+
 {
+  "summary": {
+    "totalDays": ${totalDays},
+    "cities": ["city1", "city2"],
+    "highlights": ["specific highlight 1", "specific highlight 2"]
+  },
   "itinerary": [
     {
       "day": 1,
-      "date": "2024-04-01",
+      "date": "${startDate}",
       "city": "Tokyo",
-      "morning": {
-        "name": "Place Name",
-        "description": "Brief description",
-        "tip": "Local tip",
-        "duration": "2 hours",
-        "budget": "¥500",
-        "englishSupport": "Full English"
-      },
-      "lunch": {
-        "name": "Restaurant Name",
-        "description": "Brief description",
-        "tip": "What to order",
-        "duration": "1 hour",
-        "budget": "¥1,500",
-        "englishSupport": "Some English"
-      },
-      "afternoon": { ... },
-      "dinner": { ... },
-      "evening": { ... }
+      "theme": "Arrival & Shinjuku Discovery",
+      "activities": [
+        {
+          "time": "15:00",
+          "type": "activity",
+          "name": "Shinjuku Gyoen",
+          "description": "Beautiful garden perfect for recovering from jet lag",
+          "tip": "Enter from Okido Gate (less crowded than main entrance). The Taiwan Pavilion area is usually empty.",
+          "duration": "1.5h",
+          "cost": "¥500"
+        },
+        {
+          "time": "18:00",
+          "type": "food",
+          "name": "Omoide Yokocho - Torishige",
+          "cuisine": "Yakitori",
+          "description": "Tiny 8-seat yakitori joint run by the same family since 1950",
+          "tip": "Order the 'negima' (chicken and leek) and 'sunagimo' (gizzard). Cash only.",
+          "price": "¥2,000-3,000"
+        }
+      ],
+      "stayArea": "Shinjuku"
     }
+  ],
+  "tips": [
+    "Specific tip for THIS itinerary based on the cities and dates",
+    "Another specific practical tip"
   ]
-}
-
-Generate realistic dates starting from ${startDate}. Only include real places that exist in Japan. Be specific with restaurant and place names.`;
+}`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: "You are a Japan travel expert. Always respond with valid JSON only, no markdown formatting.",
+          content: `You are JapanWise, a Japan travel expert who lived in Japan for 15 years. You know LOCAL SECRETS that tourists never discover.
+
+YOUR UNIQUE VALUE:
+- You recommend SPECIFIC restaurants by name (real places that exist)
+- You know the BEST TIME to visit each spot to avoid crowds
+- You share tips that only locals know (which entrance, what to order, hidden spots)
+- You optimize routes so travelers don't waste time
+
+RULES:
+1. Every restaurant MUST have a specific name (not just "ramen shop" but "Fuunji in Shinjuku")
+2. Every activity MUST have a useful local tip
+3. Tips should be actionable and specific (times, prices, what to order)
+4. Response must be valid JSON only - no comments, no markdown
+5. Include ALL days - never skip or abbreviate`,
         },
         {
           role: "user",
@@ -105,6 +210,7 @@ Generate realistic dates starting from ${startDate}. Only include real places th
         },
       ],
       temperature: 0.7,
+      max_tokens: 16000,
     });
 
     const textContent = response.choices[0]?.message?.content;
@@ -112,13 +218,32 @@ Generate realistic dates starting from ${startDate}. Only include real places th
       throw new Error("No response from AI");
     }
 
-    // Parse JSON from response
-    const jsonMatch = textContent.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    // Clean and parse JSON
+    let itineraryData;
+    try {
+      // Remove any potential markdown code blocks
+      let cleanedContent = textContent
+        .replace(/```json\s*/g, "")
+        .replace(/```\s*/g, "")
+        .trim();
+      
+      // Remove JavaScript comments
+      cleanedContent = cleanedContent
+        .replace(/\/\/.*$/gm, "")
+        .replace(/\/\*[\s\S]*?\*\//g, "");
+      
+      // Find the JSON object
+      const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error("No JSON found in response");
+      }
+      
+      itineraryData = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.error("JSON Parse Error:", parseError);
+      console.error("Raw response:", textContent.slice(0, 1000));
       throw new Error("Failed to parse itinerary JSON");
     }
-
-    const itineraryData = JSON.parse(jsonMatch[0]);
 
     return NextResponse.json(itineraryData);
   } catch (error) {
@@ -127,5 +252,17 @@ Generate realistic dates starting from ${startDate}. Only include real places th
       { error: "Failed to generate itinerary" },
       { status: 500 }
     );
+  }
+}
+
+function getSeasonInfo(month: number): string {
+  if (month >= 3 && month <= 5) {
+    return "SPRING: Cherry blossoms late March-mid April. Include hanami spots! Golden Week (Apr 29-May 5) is extremely crowded.";
+  } else if (month >= 6 && month <= 8) {
+    return "SUMMER: June is rainy (tsuyu). July-August hot & humid. Many festivals! Recommend early morning activities.";
+  } else if (month >= 9 && month <= 11) {
+    return "AUTUMN: Leaves peak mid-Nov to early Dec. Perfect weather. Include koyo viewing spots!";
+  } else {
+    return "WINTER: Cold but fewer tourists. Great for onsen. Illuminations in Dec. Some places closed Dec 31-Jan 3.";
   }
 }

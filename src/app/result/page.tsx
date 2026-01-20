@@ -1,61 +1,101 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-type DayPlan = {
+interface Activity {
+  time?: string;
+  type?: "activity" | "food";
+  name: string;
+  description?: string;
+  tip?: string;
+  localTip?: string;
+  duration?: string;
+  cost?: string;
+  cuisine?: string;
+  price?: string;
+  priceRange?: string;
+}
+
+interface DayPlan {
   day: number;
   date: string;
   city: string;
-  morning: Activity;
-  lunch: Activity;
-  afternoon: Activity;
-  dinner: Activity;
+  theme: string;
+  // New format
+  activities?: Activity[];
+  // Old format
+  morning?: Activity;
+  lunch?: Activity;
+  afternoon?: Activity;
+  dinner?: Activity;
   evening?: Activity;
-};
+  stayArea?: string;
+}
 
-type Activity = {
-  name: string;
-  description: string;
-  tip?: string;
-  duration?: string;
-  budget?: string;
-  englishSupport?: string;
-  mapUrl?: string;
-};
+interface Itinerary {
+  summary: {
+    totalDays: number;
+    cities: string[];
+    highlights: string[];
+  };
+  itinerary: DayPlan[];
+  tips?: string[];
+}
+
+// Helper function to convert old format to activities array
+function getActivities(day: DayPlan): Activity[] {
+  // If activities array exists, use it
+  if (day.activities && Array.isArray(day.activities)) {
+    return day.activities;
+  }
+  
+  // Otherwise, convert old format to activities array
+  const activities: Activity[] = [];
+  
+  if (day.morning) {
+    activities.push({ ...day.morning, time: day.morning.time || "09:00", type: "activity" });
+  }
+  if (day.lunch) {
+    activities.push({ ...day.lunch, time: day.lunch.time || "12:00", type: "food" });
+  }
+  if (day.afternoon) {
+    activities.push({ ...day.afternoon, time: day.afternoon.time || "14:00", type: "activity" });
+  }
+  if (day.dinner) {
+    activities.push({ ...day.dinner, time: day.dinner.time || "18:00", type: "food" });
+  }
+  if (day.evening) {
+    activities.push({ ...day.evening, time: day.evening.time || "20:00", type: "activity" });
+  }
+  
+  return activities;
+}
 
 export default function ResultPage() {
+  const router = useRouter();
+  const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [itinerary, setItinerary] = useState<DayPlan[]>([]);
-  const [tripInfo, setTripInfo] = useState<{
-    cities: string[];
-    startDate: string;
-    endDate: string;
-    travelStyle: string;
-  } | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState(1);
 
   useEffect(() => {
     const generateItinerary = async () => {
-      const savedForm = localStorage.getItem("japanwise_form");
-      if (!savedForm) {
-        setError("No trip data found. Please go back and fill out the form.");
-        setLoading(false);
-        return;
-      }
-
-      const formData = JSON.parse(savedForm);
-      setTripInfo({
-        cities: formData.cities,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        travelStyle: formData.travelStyle,
-      });
-
       try {
+        const savedForm = localStorage.getItem("japanwise_form");
+        if (!savedForm) {
+          router.push("/plan");
+          return;
+        }
+
+        const formData = JSON.parse(savedForm);
+        
         const response = await fetch("/api/generate", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: savedForm,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(formData),
         });
 
         if (!response.ok) {
@@ -63,29 +103,25 @@ export default function ResultPage() {
         }
 
         const data = await response.json();
-        setItinerary(data.itinerary);
+        console.log("Received itinerary data:", data); // Debug log
+        setItinerary(data);
       } catch (err) {
-        setError("Failed to generate itinerary. Please try again.");
-        console.error(err);
+        setError(err instanceof Error ? err.message : "Something went wrong");
       } finally {
         setLoading(false);
       }
     };
 
     generateItinerary();
-  }, []);
+  }, [router]);
 
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-red-600 border-t-transparent mx-auto mb-4"></div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Creating your perfect itinerary...
-          </h2>
-          <p className="text-gray-600">
-            Our AI is crafting a personalized Japan adventure for you.
-          </p>
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-red-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-700">Creating your perfect itinerary...</h2>
+          <p className="text-gray-500 mt-2">This may take up to 30 seconds</p>
         </div>
       </main>
     );
@@ -95,131 +131,209 @@ export default function ResultPage() {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-6xl mb-4">😢</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Oops!</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <a
-            href="/plan"
-            className="inline-block bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition"
+          <h2 className="text-xl font-semibold text-red-600 mb-4">Oops! Something went wrong</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={() => router.push("/plan")}
+            className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700"
           >
             Try Again
-          </a>
+          </button>
         </div>
       </main>
     );
   }
 
-  return (
-    <main className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="mb-8">
-          <a href="/plan" className="text-red-600 hover:text-red-700">
-            ← Modify Trip
-          </a>
+  if (!itinerary || !itinerary.itinerary || itinerary.itinerary.length === 0) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-red-600 mb-4">No itinerary data</h2>
+          <button
+            onClick={() => router.push("/plan")}
+            className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700"
+          >
+            Try Again
+          </button>
         </div>
+      </main>
+    );
+  }
 
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Your Japan Itinerary
+  const currentDay = itinerary.itinerary.find((d) => d.day === selectedDay) || itinerary.itinerary[0];
+  const currentActivities = getActivities(currentDay);
+
+  return (
+    <main className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="flex justify-between items-center">
+            <a href="/" className="text-2xl font-bold text-red-600">
+              JapanWise
+            </a>
+            <button
+              onClick={() => router.push("/plan")}
+              className="text-gray-600 hover:text-red-600"
+            >
+              ← Edit Trip
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Summary */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">
+            Your {itinerary.summary?.totalDays || itinerary.itinerary.length}-Day Japan Adventure
           </h1>
-          {tripInfo && (
-            <p className="text-gray-600">
-              {tripInfo.cities.join(" → ")} • {tripInfo.startDate} to {tripInfo.endDate}
-            </p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {(itinerary.summary?.cities || []).map((city) => (
+              <span
+                key={city}
+                className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-medium"
+              >
+                {city}
+              </span>
+            ))}
+          </div>
+          {itinerary.summary?.highlights && (
+            <div className="text-gray-600">
+              <strong>Highlights:</strong> {itinerary.summary.highlights.join(" • ")}
+            </div>
           )}
         </div>
 
-        {tripInfo && tripInfo.cities.length > 1 && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-8">
-            <div className="flex items-start gap-3">
-              <div className="text-2xl">🚄</div>
-              <div>
-                <h3 className="font-semibold text-green-800">JR Pass Recommended!</h3>
-                <p className="text-green-700 text-sm">
-                  You are visiting multiple cities. A 7-day JR Pass could save you money on shinkansen travel.
-                </p>
-                <a
-                  href="https://www.klook.com/activity/1420-7-day-jr-pass-japan/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block mt-2 text-sm text-green-800 underline hover:text-green-900"
-                >
-                  Get JR Pass on Klook →
-                </a>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Day Selector */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg shadow-sm p-4 sticky top-24">
+              <h3 className="font-semibold text-gray-700 mb-3">Select Day</h3>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {itinerary.itinerary.map((day) => (
+                  <button
+                    key={day.day}
+                    onClick={() => setSelectedDay(day.day)}
+                    className={`w-full text-left p-3 rounded-lg transition ${
+                      selectedDay === day.day
+                        ? "bg-red-600 text-white"
+                        : "bg-gray-50 hover:bg-gray-100 text-gray-700"
+                    }`}
+                  >
+                    <div className="font-semibold">Day {day.day}</div>
+                    <div className={`text-sm ${selectedDay === day.day ? "text-red-100" : "text-gray-500"}`}>
+                      {day.city}
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
-        )}
 
-        <div className="space-y-8">
-          {itinerary.map((day) => (
-            <div key={day.day} className="bg-white rounded-lg shadow-sm overflow-hidden">
-              <div className="bg-red-600 text-white px-6 py-4">
-                <h2 className="text-xl font-bold">Day {day.day}: {day.city}</h2>
-                <p className="text-red-100">{day.date}</p>
+          {/* Day Details */}
+          <div className="lg:col-span-3">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="mb-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+                    Day {currentDay.day}
+                  </span>
+                  <span className="text-gray-500">{currentDay.date}</span>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">{currentDay.city}</h2>
+                <p className="text-gray-600">{currentDay.theme}</p>
               </div>
 
-              <div className="divide-y">
-                <ActivityBlock time="Morning" emoji="🌅" activity={day.morning} />
-                <ActivityBlock time="Lunch" emoji="🍱" activity={day.lunch} />
-                <ActivityBlock time="Afternoon" emoji="☀️" activity={day.afternoon} />
-                <ActivityBlock time="Dinner" emoji="🍽️" activity={day.dinner} />
-                {day.evening && <ActivityBlock time="Evening" emoji="🌙" activity={day.evening} />}
+              {/* Activities Timeline */}
+              <div className="space-y-6">
+                {currentActivities.length > 0 ? (
+                  currentActivities.map((activity, index) => (
+                    <ActivityCard key={index} activity={activity} />
+                  ))
+                ) : (
+                  <p className="text-gray-500">No activities for this day</p>
+                )}
               </div>
+
+              {/* Stay Area */}
+              {currentDay.stayArea && (
+                <div className="mt-6 pt-6 border-t">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <span className="text-xl">🏨</span>
+                    <span>
+                      <strong>Stay tonight:</strong> {currentDay.stayArea} area
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
-          ))}
-        </div>
 
-        <div className="mt-12 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="text-xl font-bold text-blue-900 mb-2">🏨 Book Your Hotels</h3>
-          <p className="text-blue-700 mb-4">
-            Get the best rates on hotels in {tripInfo?.cities.join(", ")}.
-          </p>
-          <a
-            href={"https://www.booking.com/searchresults.html?ss=" + (tripInfo?.cities[0] || "Tokyo") + "&lang=en-us"}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
-          >
-            Search Hotels on Booking.com →
-          </a>
-        </div>
-
-        <div className="mt-8 text-center text-gray-500">
-          <p>
-            Want to modify your itinerary? <a href="/plan" className="text-red-600 underline">Start over</a>
-          </p>
+            {/* Tips Section */}
+            {itinerary.tips && itinerary.tips.length > 0 && (
+              <div className="bg-yellow-50 rounded-lg p-6 mt-6">
+                <h3 className="font-semibold text-yellow-800 mb-3">💡 Pro Tips</h3>
+                <ul className="space-y-2">
+                  {itinerary.tips.map((tip, index) => (
+                    <li key={index} className="text-yellow-700 flex items-start gap-2">
+                      <span>•</span>
+                      <span>{tip}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </main>
   );
 }
 
-function ActivityBlock({ time, emoji, activity }: { time: string; emoji: string; activity: Activity }) {
+function ActivityCard({ activity }: { activity: Activity }) {
+  if (!activity || !activity.name) {
+    return null;
+  }
+  
+  const isFood = activity.type === "food" || !!activity.cuisine;
+  const tip = activity.tip || activity.localTip;
+  const price = activity.price || activity.priceRange || activity.cost;
+
   return (
-    <div className="px-6 py-4">
-      <div className="flex items-start gap-4">
-        <div className="text-2xl">{emoji}</div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm font-medium text-gray-500">{time}</span>
-            {activity.duration && (
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{activity.duration}</span>
-            )}
-            {activity.budget && (
-              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">{activity.budget}</span>
-            )}
-          </div>
-          <h4 className="text-lg font-semibold text-gray-900">{activity.name}</h4>
-          <p className="text-gray-600 mt-1">{activity.description}</p>
-          {activity.tip && (
-            <p className="text-sm text-amber-700 bg-amber-50 px-3 py-2 rounded mt-2">💡 Tip: {activity.tip}</p>
-          )}
-          {activity.englishSupport && (
-            <p className="text-sm text-gray-500 mt-2">🗣️ English: {activity.englishSupport}</p>
-          )}
-        </div>
+    <div className={`border-l-4 ${isFood ? "border-orange-400" : "border-red-400"} pl-4 py-2`}>
+      <div className="flex items-center gap-2 mb-1">
+        {activity.time && (
+          <span className="text-sm font-medium text-gray-500">{activity.time}</span>
+        )}
+        {activity.duration && (
+          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+            {activity.duration}
+          </span>
+        )}
+        {price && (
+          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+            {price}
+          </span>
+        )}
       </div>
+      
+      <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+        {isFood ? "🍽️" : "📍"} {activity.name}
+        {activity.cuisine && (
+          <span className="text-sm font-normal text-gray-500">({activity.cuisine})</span>
+        )}
+      </h4>
+      
+      {activity.description && (
+        <p className="text-gray-600 text-sm mt-1">{activity.description}</p>
+      )}
+      
+      {tip && (
+        <p className="text-sm text-red-600 mt-2 flex items-start gap-1">
+          <span>💡</span>
+          <span>{tip}</span>
+        </p>
+      )}
     </div>
   );
 }
