@@ -1,87 +1,176 @@
+'use client';
+
+import { MapPin, Clock, Sparkles, ChevronDown, Utensils, Train, Camera, Star, ArrowRight, CheckCircle2 } from 'lucide-react';
+
 export default function Home() {
   return (
-    <main className="min-h-screen bg-white">
-      {/* Hero Section with Japanese Background */}
-      <section className="relative min-h-[90vh] flex items-center justify-center">
+    <main className="min-h-screen bg-stone-50">
+      {/* Hero Section */}
+      <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
         {/* Background Image */}
         <div 
           className="absolute inset-0 bg-cover bg-center"
           style={{
-            backgroundImage: "url('https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=2070')",
+            backgroundImage: "url('https://images.unsplash.com/photo-1545569341-9eb8b30979d9?q=80&w=2070')",
           }}
         >
-          {/* Dark Overlay */}
-          <div className="absolute inset-0 bg-black/50"></div>
+          {/* Gradient Overlay - more sophisticated than solid black */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80"></div>
         </div>
         
         {/* Content */}
-        <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
-          <p className="text-red-400 text-lg mb-4 tracking-widest uppercase">
-            ようこそ • Welcome
-          </p>
-          <h1 className="text-5xl md:text-7xl font-bold text-white mb-6">
-            JapanWise
-          </h1>
-          <p className="text-xl md:text-2xl text-gray-200 mb-4">
-            Your journey to Japan begins here
-          </p>
-          <p className="text-lg text-gray-300 mb-10 max-w-2xl mx-auto">
-            AI-powered travel planning with the spirit of Omotenashi.<br />
-            Personalized itineraries with local secrets, real restaurant names,<br />
-            and tips only locals know.
-          </p>
-          <a
-            href="/plan"
-            className="inline-block bg-red-600 text-white text-lg font-semibold px-10 py-4 rounded-lg hover:bg-red-700 transition transform hover:scale-105"
-          >
-            Begin Your Journey →
-          </a>
+        <div className="relative z-10 max-w-5xl mx-auto px-6 py-20">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            {/* Left: Copy */}
+            <div className="text-left">
+              <p className="text-amber-400 text-sm font-medium tracking-[0.3em] uppercase mb-6">
+                Your Gateway to Japan
+              </p>
+              <h1 className="text-4xl md:text-6xl font-light text-white mb-6 leading-tight tracking-tight">
+                Discover the<br />
+                <span className="font-semibold">real</span> Japan
+              </h1>
+              <p className="text-lg text-stone-300 mb-8 leading-relaxed max-w-lg">
+                AI-crafted itineraries with local secrets, real restaurant names, 
+                and tips only insiders know. Your journey to Japanese culture starts here.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                <a
+                  href="/plan"
+                  className="group inline-flex items-center justify-center gap-2 bg-white text-stone-900 text-base font-medium px-8 py-4 rounded-full hover:bg-amber-400 transition-all duration-300"
+                >
+                  Create Free Itinerary
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </a>
+              </div>
+              
+              <div className="flex items-center gap-6 text-stone-400 text-sm">
+                <span className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  Free
+                </span>
+                <span className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  No signup
+                </span>
+                <span className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  60 seconds
+                </span>
+              </div>
+            </div>
+            
+            {/* Right: Sample Itinerary Card */}
+            <div className="hidden lg:block">
+              <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-6 transform rotate-1 hover:rotate-0 transition-transform duration-500">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="bg-stone-900 text-white px-3 py-1 rounded-full text-xs font-medium tracking-wide">
+                    Day 1
+                  </span>
+                  <span className="text-stone-500 text-sm">Tokyo</span>
+                </div>
+                <h3 className="text-lg font-semibold text-stone-900 mb-5">Arrival & Shinjuku Discovery</h3>
+                
+                <div className="space-y-4">
+                  <div className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                        <Camera className="w-5 h-5 text-amber-600" />
+                      </div>
+                      <div className="w-px h-full bg-stone-200 mt-2"></div>
+                    </div>
+                    <div className="pb-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-medium text-stone-500">15:00</span>
+                        <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">¥500</span>
+                      </div>
+                      <h4 className="font-medium text-stone-900 text-sm">Shinjuku Gyoen</h4>
+                      <p className="text-stone-600 text-xs mt-1">Beautiful garden perfect for jet lag recovery</p>
+                      <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        Enter from Okido Gate — less crowded
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center">
+                        <Utensils className="w-5 h-5 text-rose-600" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-medium text-stone-500">18:00</span>
+                        <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">¥2,500</span>
+                      </div>
+                      <h4 className="font-medium text-stone-900 text-sm">Omoide Yokocho — Torishige</h4>
+                      <p className="text-stone-600 text-xs mt-1">8-seat yakitori joint, same family since 1950</p>
+                      <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        Order negima & sunagimo. Cash only.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Scroll Indicator */}
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
-          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+          <ChevronDown className="w-6 h-6 text-white/60 animate-bounce" />
         </div>
       </section>
 
       {/* What Makes Us Different */}
-      <section className="py-20 bg-stone-50">
-        <div className="max-w-5xl mx-auto px-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-center text-gray-900 mb-4">
-            The Art of Travel Planning
-          </h2>
-          <p className="text-center text-gray-600 mb-16 max-w-2xl mx-auto">
-            We don't just create itineraries. We craft experiences with the same care and attention that defines Japanese hospitality.
-          </p>
+      <section className="py-24 bg-white">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <p className="text-amber-600 text-sm font-medium tracking-[0.2em] uppercase mb-4">
+              Not just any AI planner
+            </p>
+            <h2 className="text-3xl md:text-4xl font-light text-stone-900 tracking-tight">
+              Japan-obsessed
+            </h2>
+          </div>
           
-          <div className="grid md:grid-cols-3 gap-10">
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
-                <span className="text-3xl">🎯</span>
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="group p-8 rounded-2xl bg-stone-50 hover:bg-stone-900 transition-all duration-500">
+              <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center mb-6 group-hover:bg-amber-400 transition-colors">
+                <MapPin className="w-6 h-6 text-stone-700 group-hover:text-stone-900" />
               </div>
-              <h3 className="text-xl font-semibold mb-3 text-gray-900">Personalized</h3>
-              <p className="text-gray-600">
-                Every itinerary is crafted for your interests, pace, and travel style. No two journeys are the same.
+              <h3 className="text-lg font-medium mb-3 text-stone-900 group-hover:text-white transition-colors">
+                Real Places
+              </h3>
+              <p className="text-stone-600 group-hover:text-stone-400 transition-colors leading-relaxed">
+                Actual restaurant names, not "a sushi place nearby." We give you Torishige in Omoide Yokocho, row 3, second stall on the left.
               </p>
             </div>
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
-                <span className="text-3xl">🏯</span>
+            
+            <div className="group p-8 rounded-2xl bg-stone-50 hover:bg-stone-900 transition-all duration-500">
+              <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center mb-6 group-hover:bg-amber-400 transition-colors">
+                <Sparkles className="w-6 h-6 text-stone-700 group-hover:text-stone-900" />
               </div>
-              <h3 className="text-xl font-semibold mb-3 text-gray-900">Local Secrets</h3>
-              <p className="text-gray-600">
-                Real restaurant names. Hidden entrances. Best times to visit. Knowledge that only locals have.
+              <h3 className="text-lg font-medium mb-3 text-stone-900 group-hover:text-white transition-colors">
+                Local Secrets
+              </h3>
+              <p className="text-stone-600 group-hover:text-stone-400 transition-colors leading-relaxed">
+                Skip the main entrance. Which gate is less crowded. Where to stand for the best view. Tips only locals know.
               </p>
             </div>
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
-                <span className="text-3xl">⚡</span>
+            
+            <div className="group p-8 rounded-2xl bg-stone-50 hover:bg-stone-900 transition-all duration-500">
+              <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center mb-6 group-hover:bg-amber-400 transition-colors">
+                <Clock className="w-6 h-6 text-stone-700 group-hover:text-stone-900" />
               </div>
-              <h3 className="text-xl font-semibold mb-3 text-gray-900">Instant</h3>
-              <p className="text-gray-600">
-                Your complete day-by-day itinerary in under a minute. Detailed, actionable, ready to go.
+              <h3 className="text-lg font-medium mb-3 text-stone-900 group-hover:text-white transition-colors">
+                Instant & Free
+              </h3>
+              <p className="text-stone-600 group-hover:text-stone-400 transition-colors leading-relaxed">
+                Your complete day-by-day itinerary in under a minute. Detailed, actionable, ready to explore.
               </p>
             </div>
           </div>
@@ -89,82 +178,114 @@ export default function Home() {
       </section>
 
       {/* How It Works */}
-      <section className="py-20 bg-white">
-        <div className="max-w-4xl mx-auto px-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-center text-gray-900 mb-16">
-            Simple as 1, 2, 3
-          </h2>
-          <div className="space-y-12">
-            <div className="flex items-start gap-6">
-              <div className="bg-red-600 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl shrink-0">
+      <section className="py-24 bg-stone-50">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-light text-stone-900 tracking-tight">
+              Three steps to your perfect trip
+            </h2>
+          </div>
+          
+          <div className="space-y-8">
+            <div className="flex items-start gap-6 p-6 bg-white rounded-2xl shadow-sm">
+              <div className="w-12 h-12 rounded-full bg-stone-900 text-white flex items-center justify-center font-medium text-lg shrink-0">
                 1
               </div>
               <div>
-                <h3 className="text-2xl font-semibold mb-2 text-gray-900">Tell us about your trip</h3>
-                <p className="text-gray-600 text-lg">When you're traveling, what cities interest you, your travel style and preferences.</p>
+                <h3 className="text-xl font-medium mb-2 text-stone-900">Tell us about your trip</h3>
+                <p className="text-stone-600">When you're traveling, which cities interest you, your pace, and what kind of experiences you're looking for.</p>
               </div>
             </div>
-            <div className="flex items-start gap-6">
-              <div className="bg-red-600 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl shrink-0">
+            
+            <div className="flex items-start gap-6 p-6 bg-white rounded-2xl shadow-sm">
+              <div className="w-12 h-12 rounded-full bg-stone-900 text-white flex items-center justify-center font-medium text-lg shrink-0">
                 2
               </div>
               <div>
-                <h3 className="text-2xl font-semibold mb-2 text-gray-900">AI crafts your itinerary</h3>
-                <p className="text-gray-600 text-lg">Our AI, trained on local knowledge, builds a personalized day-by-day plan with specific restaurants, spots, and insider tips.</p>
+                <h3 className="text-xl font-medium mb-2 text-stone-900">AI crafts your itinerary</h3>
+                <p className="text-stone-600">Our AI builds a personalized day-by-day plan with specific restaurants, hidden spots, and insider tips for each location.</p>
               </div>
             </div>
-            <div className="flex items-start gap-6">
-              <div className="bg-red-600 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl shrink-0">
+            
+            <div className="flex items-start gap-6 p-6 bg-white rounded-2xl shadow-sm">
+              <div className="w-12 h-12 rounded-full bg-stone-900 text-white flex items-center justify-center font-medium text-lg shrink-0">
                 3
               </div>
               <div>
-                <h3 className="text-2xl font-semibold mb-2 text-gray-900">Book and explore</h3>
-                <p className="text-gray-600 text-lg">Book experiences directly from your itinerary and start your journey with confidence.</p>
+                <h3 className="text-xl font-medium mb-2 text-stone-900">Explore with confidence</h3>
+                <p className="text-stone-600">Book experiences, save your itinerary, and start your journey knowing you have a plan built by someone who truly knows Japan.</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Example Itinerary Preview */}
-      <section className="py-20 bg-stone-100">
-        <div className="max-w-5xl mx-auto px-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-center text-gray-900 mb-4">
-            See What You'll Get
-          </h2>
-          <p className="text-center text-gray-600 mb-12">
-            Detailed daily plans with specific times, places, and local tips
+      {/* Philosophy Section */}
+      <section className="py-24 bg-stone-900 text-white">
+        <div className="max-w-3xl mx-auto px-6 text-center">
+          <p className="text-amber-400 text-sm font-medium tracking-[0.2em] uppercase mb-6">
+            Our Philosophy
           </p>
-          
-          {/* Mock Itinerary Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl mx-auto">
+          <h2 className="text-2xl md:text-3xl font-light leading-relaxed mb-8">
+            "Japan isn't just a destination. It's a culture, a way of seeing the world. 
+            JapanWise is your first step into that world — whether you're planning 
+            your first trip or falling deeper in love with a place you've visited before."
+          </h2>
+          <div className="w-16 h-px bg-amber-400 mx-auto"></div>
+        </div>
+      </section>
+
+      {/* Mobile Sample Card (shown only on mobile) */}
+      <section className="py-16 bg-white lg:hidden">
+        <div className="max-w-md mx-auto px-6">
+          <p className="text-center text-sm text-stone-500 mb-6">What you'll get</p>
+          <div className="bg-stone-50 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-4">
-              <span className="bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+              <span className="bg-stone-900 text-white px-3 py-1 rounded-full text-xs font-medium">
                 Day 1
               </span>
-              <span className="text-gray-500">Tokyo</span>
+              <span className="text-stone-500 text-sm">Tokyo</span>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-6">Arrival & Shinjuku Discovery</h3>
+            <h3 className="text-lg font-semibold text-stone-900 mb-5">Arrival & Shinjuku Discovery</h3>
             
-            <div className="space-y-4">
-              <div className="border-l-4 border-red-400 pl-4 py-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-gray-500">15:00</span>
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">¥500</span>
+            <div className="space-y-5">
+              <div className="flex gap-4">
+                <div className="flex flex-col items-center">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                    <Camera className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div className="w-px h-full bg-stone-200 mt-2"></div>
                 </div>
-                <h4 className="font-semibold text-gray-900">📍 Shinjuku Gyoen</h4>
-                <p className="text-gray-600 text-sm">Beautiful garden perfect for recovering from jet lag</p>
-                <p className="text-sm text-red-600 mt-1">💡 Enter from Okido Gate - less crowded than main entrance</p>
+                <div className="pb-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-medium text-stone-500">15:00</span>
+                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">¥500</span>
+                  </div>
+                  <h4 className="font-medium text-stone-900 text-sm">Shinjuku Gyoen</h4>
+                  <p className="text-stone-600 text-xs mt-1">Beautiful garden perfect for recovering from jet lag</p>
+                  <p className="text-xs text-amber-600 mt-2 flex items-start gap-1">
+                    <Sparkles className="w-3 h-3 mt-0.5 shrink-0" />
+                    Enter from Okido Gate — less crowded than main entrance
+                  </p>
+                </div>
               </div>
               
-              <div className="border-l-4 border-orange-400 pl-4 py-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-gray-500">18:00</span>
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">¥2,000-3,000</span>
+              <div className="flex gap-4">
+                <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                  <Utensils className="w-5 h-5 text-rose-600" />
                 </div>
-                <h4 className="font-semibold text-gray-900">🍽️ Omoide Yokocho - Torishige</h4>
-                <p className="text-gray-600 text-sm">Tiny 8-seat yakitori joint run by the same family since 1950</p>
-                <p className="text-sm text-red-600 mt-1">💡 Order the 'negima' and 'sunagimo'. Cash only.</p>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-medium text-stone-500">18:00</span>
+                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">¥2,000-3,000</span>
+                  </div>
+                  <h4 className="font-medium text-stone-900 text-sm">Omoide Yokocho — Torishige</h4>
+                  <p className="text-stone-600 text-xs mt-1">Tiny 8-seat yakitori joint run by the same family since 1950</p>
+                  <p className="text-xs text-amber-600 mt-2 flex items-start gap-1">
+                    <Sparkles className="w-3 h-3 mt-0.5 shrink-0" />
+                    Order the 'negima' and 'sunagimo'. Cash only.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -172,7 +293,7 @@ export default function Home() {
       </section>
 
       {/* Final CTA */}
-      <section className="relative py-24">
+      <section className="relative py-24 overflow-hidden">
         {/* Background */}
         <div 
           className="absolute inset-0 bg-cover bg-center"
@@ -180,31 +301,36 @@ export default function Home() {
             backgroundImage: "url('https://images.unsplash.com/photo-1528360983277-13d401cdc186?q=80&w=2070')",
           }}
         >
-          <div className="absolute inset-0 bg-red-900/80"></div>
+          <div className="absolute inset-0 bg-stone-900/90"></div>
         </div>
         
-        <div className="relative z-10 max-w-4xl mx-auto px-4 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+        <div className="relative z-10 max-w-3xl mx-auto px-6 text-center">
+          <h2 className="text-3xl md:text-4xl font-light text-white mb-6 tracking-tight">
             Ready to discover Japan?
           </h2>
-          <p className="text-red-100 mb-10 text-lg">
-            Free to use. No signup required.<br />
-            Your perfect itinerary awaits.
+          <p className="text-stone-400 mb-10 text-lg">
+            Free to use. No signup required. Your journey starts now.
           </p>
           <a
             href="/plan"
-            className="inline-block bg-white text-red-600 text-lg font-semibold px-10 py-4 rounded-lg hover:bg-gray-100 transition transform hover:scale-105"
+            className="group inline-flex items-center justify-center gap-2 bg-white text-stone-900 text-base font-medium px-10 py-4 rounded-full hover:bg-amber-400 transition-all duration-300"
           >
-            Start Planning →
+            Create Your Itinerary
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </a>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-8 bg-stone-900 text-center">
-        <p className="text-stone-400 text-sm">
-          © 2026 JapanWise. Crafted with 心 for travelers to Japan.
-        </p>
+      <footer className="py-8 bg-stone-900 border-t border-stone-800">
+        <div className="max-w-5xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
+          <p className="text-stone-500 text-sm">
+            © 2026 JapanWise
+          </p>
+          <p className="text-stone-600 text-sm">
+            Crafted with 心 for travelers to Japan
+          </p>
+        </div>
       </footer>
     </main>
   );
