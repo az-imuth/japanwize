@@ -252,7 +252,7 @@ export default function ResultPage() {
             doc.setFontSize(9);
             doc.setFont("helvetica", "italic");
             doc.setTextColor(180, 120, 0); // amber color
-            const splitTip = doc.splitTextToSize(`💡 ${tip}`, contentWidth - 10);
+            const splitTip = doc.splitTextToSize(`Tip: ${tip}`, contentWidth - 10);
             doc.text(splitTip, margin + 5, yPosition);
             yPosition += splitTip.length * 4 + 4;
           }
@@ -266,7 +266,7 @@ export default function ResultPage() {
           doc.setFontSize(9);
           doc.setFont("helvetica", "normal");
           doc.setTextColor(100);
-          doc.text(`🏨 Stay: ${day.stayArea} area`, margin + 5, yPosition);
+          doc.text(`Stay: ${day.stayArea} area`, margin + 5, yPosition);
           yPosition += 8;
         }
 
