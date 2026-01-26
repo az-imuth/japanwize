@@ -37,7 +37,7 @@ export default function Home() {
               
               <div className="flex flex-col sm:flex-row gap-4 mb-6">
                 <a
-                  href="/plan"
+                  href="/chat"
                   className="group inline-flex items-center justify-center gap-2 bg-white text-stone-900 text-base font-medium px-8 py-4 rounded-full hover:bg-amber-400 transition-all duration-300"
                 >
                   Create Free Itinerary
@@ -312,7 +312,7 @@ export default function Home() {
             Free to use. No signup required. Your journey starts now.
           </p>
           <a
-            href="/plan"
+            href="/chat"
             className="group inline-flex items-center justify-center gap-2 bg-white text-stone-900 text-base font-medium px-10 py-4 rounded-full hover:bg-amber-400 transition-all duration-300"
           >
             Create Your Itinerary
