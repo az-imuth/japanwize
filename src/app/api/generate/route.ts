@@ -87,7 +87,6 @@ function getSeasonInfo(month: number): string {
 function getPersonalizationRules(travelerType: string, foodStyle: string): string {
   const rules: string[] = [];
 
-  // Traveler type specific rules
   switch (travelerType) {
     case "family-young":
       rules.push("FAMILY WITH YOUNG KIDS (0-6): No izakayas or bars. Dinner by 18:00. Kid-friendly restaurants with high chairs. Stroller-accessible spots. Include parks, aquariums, interactive museums. Shorter walking distances. Nap time consideration in early afternoon.");
@@ -115,7 +114,6 @@ function getPersonalizationRules(travelerType: string, foodStyle: string): strin
       break;
   }
 
-  // Food style specific rules
   switch (foodStyle) {
     case "budget":
       rules.push("BUDGET FOOD: Convenience stores (onigiri, sandwiches), standing soba, gyudon chains OK for quick meals. Lunch deals (teishoku). Depachika discounts after 7pm.");
@@ -133,6 +131,46 @@ function getPersonalizationRules(travelerType: string, foodStyle: string): strin
 
   return rules.join("\n");
 }
+
+// ============================================
+// SYSTEM PROMPT - JAPANWISE SOUL
+// ============================================
+const SYSTEM_PROMPT = `You are JapanWise — not a travel agency, but a friend who lives in Japan.
+
+YOUR IDENTITY:
+You're the friend everyone wishes they had in Japan. You've lived in Tokyo for 8 years, but you've spent serious time in Kyoto, Osaka, and beyond. You're a bit of a food obsessive, you know the culture deeply, and you genuinely love showing people YOUR Japan — not the guidebook Japan.
+
+HOW YOU PLAN TRIPS:
+You're not making an "itinerary" — you're planning a trip for a friend who's visiting you. You'd never send them somewhere you haven't been yourself. You pick places because YOU love them, not because they're famous.
+
+YOUR PHILOSOPHY:
+1. "IKI" (粋) — Be tasteful, never try-hard. No over-stuffed schedules. No tourist traps just because they're popular. Leave room to breathe.
+
+2. "KIKUBARI" (気配り) — Anticipate what they need before they know it. Tired after 3 temples? There's a perfect kissaten around the corner. Heavy lunch? The afternoon is a gentle walk.
+
+3. "SENSIBILITY" — Your taste shows in what you pick. Not the famous spot, but the RIGHT spot for THIS person. A solo female traveler gets different recs than a group of friends.
+
+4. "STORY" — A trip is a narrative, not a checklist. Day 1 sets the tone. The middle builds. The last day closes with meaning. Even within a day, there's a rhythm.
+
+YOUR RULES:
+- NEVER recommend a place you wouldn't personally take a friend
+- ALWAYS consider who this specific person is (kids? couple? foodie? first-timer?)
+- Each restaurant must be a REAL place with a specific name and location
+- Include the insider tip you'd whisper to them as you walk in together
+- Mix the iconic (if they want it) with your personal favorites
+- Consider the FLOW: energy levels, walking distance, meal timing, emotional arc
+- Variety: never repeat the same type of spot back-to-back unless that's the point
+
+CRITICAL - PRACTICAL PLANNING (for "planner" type travelers):
+- ALWAYS include "transport" field: how to get from previous spot (e.g., "10 min walk", "JR Yamanote to Shibuya (15 min, ¥200)", "Taxi recommended (¥1,500)")
+- ALWAYS include "reservation" field: "Required - book 2 weeks ahead", "Recommended", "Walk-in OK", "Get there by 11am to avoid queue"
+- Make sure timing is REALISTIC - include travel time between spots
+- If a place is hard to find, mention landmarks in the tip
+- For popular spots, mention best times to avoid crowds
+
+RESPONSE:
+- Valid JSON only, no markdown, no explanation
+- Every activity MUST have transport and reservation fields`;
 
 // ============================================
 // MAIN HANDLER
@@ -181,6 +219,9 @@ export async function POST(request: NextRequest) {
       dietaryRestrictions,
       avoidances,
       additionalNotes,
+      // For partial adjustments
+      existingItinerary,
+      adjustmentRequest,
     } = formData;
 
     // Calculate days
@@ -225,6 +266,69 @@ export async function POST(request: NextRequest) {
     // Get personalization rules
     const personalizationRules = getPersonalizationRules(travelerType, foodStyle);
 
+    // ============================================
+    // PARTIAL ADJUSTMENT MODE
+    // ============================================
+    if (existingItinerary && adjustmentRequest) {
+      const adjustPrompt = `You have already created this itinerary for your friend:
+
+${JSON.stringify(existingItinerary, null, 2)}
+
+Your friend now says: "${adjustmentRequest}"
+
+Please adjust the itinerary based on their request. 
+IMPORTANT:
+- Keep everything that's working well
+- Only change what they asked for
+- Maintain the overall flow and quality
+- Update transport times if spots change
+- Keep the same JSON structure
+- NEVER remove days or drastically restructure unless asked
+
+Return the COMPLETE updated itinerary as valid JSON.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: adjustPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 8000,
+      });
+
+      const textContent = response.choices[0]?.message?.content;
+      if (!textContent) throw new Error("No response from AI");
+
+      let itineraryData;
+      try {
+        let cleanedContent = textContent
+          .replace(/```json\s*/g, "")
+          .replace(/```\s*/g, "")
+          .replace(/\/\/.*$/gm, "")
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .trim();
+        
+        const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("No JSON found");
+        
+        itineraryData = JSON.parse(jsonMatch[0]);
+      } catch (parseError) {
+        console.error("Parse error:", parseError);
+        throw new Error("Failed to parse adjusted itinerary");
+      }
+
+      return NextResponse.json(itineraryData, {
+        headers: {
+          "X-RateLimit-Limit": RATE_LIMIT.toString(),
+          "X-RateLimit-Remaining": remaining.toString(),
+        }
+      });
+    }
+
+    // ============================================
+    // FULL GENERATION MODE
+    // ============================================
     const prompt = `Create a ${totalDays}-day Japan itinerary for my friend.
 
 WHO IS THIS FRIEND:
@@ -255,7 +359,7 @@ ${additionalNotes ? `THEY MENTIONED: ${additionalNotes}` : ""}
 PERSONALIZATION RULES (FOLLOW STRICTLY):
 ${personalizationRules}
 
-Return ONLY valid JSON:
+Return ONLY valid JSON with this structure:
 {
   "summary": {
     "totalDays": ${totalDays},
@@ -276,7 +380,9 @@ Return ONLY valid JSON:
           "description": "Why I'm taking you here",
           "tip": "What I'd tell you as we walk in",
           "duration": "1.5h",
-          "cost": "¥500"
+          "cost": "¥500",
+          "transport": "From Shinjuku Station East Exit: 5 min walk",
+          "reservation": "Not needed"
         },
         {
           "time": "18:00",
@@ -285,7 +391,9 @@ Return ONLY valid JSON:
           "cuisine": "Type",
           "description": "Why this place is special",
           "tip": "What to order, where to sit, what to know",
-          "price": "¥2,000-3,000"
+          "price": "¥2,000-3,000",
+          "transport": "10 min walk through Omoide Yokocho",
+          "reservation": "Recommended for dinner - call same day morning"
         }
       ],
       "stayArea": "Neighborhood"
@@ -297,44 +405,8 @@ Return ONLY valid JSON:
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        {
-          role: "system",
-          content: `You are JapanWise — not a travel agency, but a friend who lives in Japan.
-
-YOUR IDENTITY:
-You're the friend everyone wishes they had in Japan. You've lived in Tokyo for 8 years, but you've spent serious time in Kyoto, Osaka, and beyond. You're a bit of a food obsessive, you know the culture deeply, and you genuinely love showing people YOUR Japan — not the guidebook Japan.
-
-HOW YOU PLAN TRIPS:
-You're not making an "itinerary" — you're planning a trip for a friend who's visiting you. You'd never send them somewhere you haven't been yourself. You pick places because YOU love them, not because they're famous.
-
-YOUR PHILOSOPHY:
-1. "IKI" (粋) — Be tasteful, never try-hard. No over-stuffed schedules. No tourist traps just because they're popular. Leave room to breathe.
-
-2. "KIKUBARI" (気配り) — Anticipate what they need before they know it. Tired after 3 temples? There's a perfect kissaten around the corner. Heavy lunch? The afternoon is a gentle walk.
-
-3. "SENSIBILITY" — Your taste shows in what you pick. Not the famous spot, but the RIGHT spot for THIS person. A solo female traveler gets different recs than a group of friends.
-
-4. "STORY" — A trip is a narrative, not a checklist. Day 1 sets the tone. The middle builds. The last day closes with meaning. Even within a day, there's a rhythm.
-
-YOUR RULES:
-- NEVER recommend a place you wouldn't personally take a friend
-- ALWAYS consider who this specific person is (kids? couple? foodie? first-timer?)
-- Each restaurant must be a REAL place with a specific name and location
-- Include the insider tip you'd whisper to them as you walk in together
-- Mix the iconic (if they want it) with your personal favorites
-- Consider the FLOW: energy levels, walking distance, meal timing, emotional arc
-- If a place needs reservations, say so
-- Variety: never repeat the same type of spot back-to-back unless that's the point
-
-RESPONSE:
-- Valid JSON only, no markdown, no explanation
-- Include ALL ${totalDays} days
-- Every activity has a real name, location, and your personal tip`,
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
+        { role: "system", content: SYSTEM_PROMPT + `\n\nInclude ALL ${totalDays} days. Every activity MUST have transport and reservation fields.` },
+        { role: "user", content: prompt },
       ],
       temperature: 0.85,
       max_tokens: 8000,
@@ -345,7 +417,6 @@ RESPONSE:
       throw new Error("No response from AI");
     }
 
-    // Parse JSON
     let itineraryData;
     try {
       let cleanedContent = textContent
