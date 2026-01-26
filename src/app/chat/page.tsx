@@ -15,8 +15,11 @@ import {
   Hotel,
   FileDown,
   Menu,
-  X
+  X,
+  Train,
+  AlertCircle
 } from "lucide-react";
+import { jsPDF } from "jspdf";
 
 // ============================================
 // TYPES
@@ -58,6 +61,8 @@ interface Activity {
   cost?: string;
   price?: string;
   cuisine?: string;
+  reservation?: string;
+  transport?: string;
 }
 
 interface Itinerary {
@@ -71,13 +76,34 @@ interface Itinerary {
 }
 
 // ============================================
-// CONSTANTS
+// PHASES - What we need to ask
 // ============================================
 const PHASES = [
-  { id: 1, name: "Dates", question: "When are you visiting Japan?", inputType: "calendar" as InputType },
-  { id: 2, name: "Travelers", question: "Who are you traveling with? Tell me a bit about your group so I can personalize the trip!", inputType: "text" as InputType },
-  { id: 3, name: "Cities", question: "Which areas interest you?", inputType: "multi-select" as InputType, options: ["Tokyo", "Kyoto", "Osaka", "Hiroshima", "Hakone", "Nara", "Kanazawa", "Fukuoka", "Sapporo", "Okinawa"] },
-  { id: 4, name: "Must-do", question: "Anything you absolutely want to do or see? (Or type 'skip' if you're open to suggestions!)", inputType: "text" as InputType },
+  { 
+    id: 1, 
+    name: "Dates", 
+    question: "When are you visiting Japan?", 
+    inputType: "calendar" as InputType 
+  },
+  { 
+    id: 2, 
+    name: "Travelers", 
+    question: "Who's joining you? Tell me about your group!\n\n(e.g., \"Me and my girlfriend, both late 20s\" or \"Family with 2 kids, ages 8 and 12\")", 
+    inputType: "text" as InputType 
+  },
+  { 
+    id: 3, 
+    name: "Cities", 
+    question: "Which areas do you want to visit?", 
+    inputType: "multi-select" as InputType, 
+    options: ["Tokyo", "Kyoto", "Osaka", "Hiroshima", "Hakone", "Nara", "Kanazawa", "Fukuoka", "Sapporo", "Okinawa"] 
+  },
+  { 
+    id: 4, 
+    name: "Must-do", 
+    question: "Any must-dos? Places, foods, experiences you absolutely want?\n\n(e.g., \"TeamLab, sushi at Tsukiji, see Mt. Fuji\" or \"skip\" if you want me to suggest everything)", 
+    inputType: "text" as InputType 
+  },
 ];
 
 const PROGRESS_PER_PHASE = 100 / (PHASES.length + 1);
@@ -90,7 +116,7 @@ export default function ChatPage() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Hey! I'm JapanWise — think of me as your friend who lives in Japan. 🇯🇵\n\nI'll help you plan a trip you'll actually love. Let's start with a few questions, then we'll build your perfect itinerary together.\n\nReady?",
+      content: "Hey! I'm JapanWise — think of me as your friend who lives in Japan. 🇯🇵\n\nI'll help you build a trip that actually works:\n• Efficient routes (no backtracking)\n• Realistic timing\n• What needs reservations\n• How to get between spots\n\nTell me what you want to do, and I'll handle the annoying planning parts. Ready?",
     },
     {
       id: "phase-1",
@@ -117,8 +143,8 @@ export default function ChatPage() {
   }, [messages]);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, [currentPhase]);
+    if (!isGenerating) inputRef.current?.focus();
+  }, [currentPhase, isGenerating]);
 
   // ============================================
   // HANDLERS
@@ -195,8 +221,8 @@ export default function ChatPage() {
       setTimeout(() => {
         addMessage(
           "assistant",
-          "Perfect! I've got everything I need to create your itinerary.\n\nWant to tell me anything else? (pace, food preferences, budget, etc.) Or we can generate now!",
-          { inputType: "buttons", options: ["Generate my itinerary! ✨", "I want to add more details"] }
+          "Got it! Ready to build your itinerary?\n\nOr tell me more if you want (pace, food preferences, budget, things to avoid...)",
+          { inputType: "buttons", options: ["Build my itinerary! ✨", "I want to add more details"] }
         );
       }, 500);
     }
@@ -205,11 +231,11 @@ export default function ChatPage() {
   const handleButtonClick = async (option: string) => {
     addMessage("user", option);
 
-    if (option.includes("Generate")) {
+    if (option.includes("Build")) {
       await generateItinerary();
     } else {
       setTimeout(() => {
-        addMessage("assistant", "Sure! What else would you like me to know?\n\nExamples:\n• \"We prefer a relaxed pace\"\n• \"Vegetarian options needed\"\n• \"Budget around ¥15,000/day\"\n• \"We love ramen!\"");
+        addMessage("assistant", "Sure! What else should I know?\n\nExamples:\n• \"Relaxed pace, no rushing\"\n• \"We're vegetarian\"\n• \"Budget around ¥15,000/day\"\n• \"Avoid crowded tourist spots\"");
       }, 500);
     }
   };
@@ -220,9 +246,10 @@ export default function ChatPage() {
 
   const generateItinerary = async () => {
     setIsGenerating(true);
-    addMessage("assistant", "Creating your perfect Japan trip... Give me about 30 seconds. ✨");
+    addMessage("assistant", "Building your trip... \n\nI'm working out the best routes, checking what needs reservations, and making sure the timing actually works. Give me ~30 seconds. ✨");
 
     try {
+      // Parse traveler info
       const travelerText = tripInfo.travelers?.toLowerCase() || "";
       let travelerType = "solo-male";
       if (travelerText.includes("girlfriend") || travelerText.includes("boyfriend") || travelerText.includes("partner") || travelerText.includes("wife") || travelerText.includes("husband") || travelerText.includes("couple")) {
@@ -232,7 +259,7 @@ export default function ChatPage() {
       } else if (travelerText.includes("family") || travelerText.includes("kid") || travelerText.includes("child") || travelerText.includes("son") || travelerText.includes("daughter")) {
         if (travelerText.includes("teen")) {
           travelerType = "family-teens";
-        } else if (travelerText.includes("baby") || travelerText.includes("toddler") || /\b[0-5]\s*(year|yr)/.test(travelerText)) {
+        } else if (travelerText.includes("baby") || travelerText.includes("toddler") || /\b[0-5]\s*(year|yr|歳)/.test(travelerText)) {
           travelerType = "family-young";
         } else {
           travelerType = "family-kids";
@@ -264,11 +291,11 @@ export default function ChatPage() {
 
       addMessage(
         "assistant",
-        `Done! 🎉 I've created a ${data.summary?.totalDays || ""}-day trip for you.\n\nCheck out your itinerary on the right. Feel free to ask me to change anything!\n\nTry:\n• \"Day 3 is too packed\"\n• \"Add more food spots\"\n• \"Make mornings start later\"\n• \"Add a day trip to Mt. Fuji\"`
+        `Done! Here's your ${data.summary?.totalDays || ""}-day trip. 🎉\n\nCheck the itinerary on the right (or tap the menu icon on mobile).\n\nWant to change anything? Just tell me:\n• \"Day 2 is too packed\"\n• \"Add more ramen spots\"\n• \"Make mornings start later\"\n• \"Switch Day 3 and 4\"`
       );
     } catch (error) {
       console.error("Generation error:", error);
-      addMessage("assistant", "Sorry, something went wrong. Let's try again...");
+      addMessage("assistant", "Sorry, something went wrong. Let me try again...");
     } finally {
       setIsGenerating(false);
     }
@@ -282,6 +309,9 @@ export default function ChatPage() {
     setInputValue("");
     setIsLoading(true);
 
+    // Show what's happening
+    addMessage("assistant", "Updating your itinerary...");
+
     try {
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -294,7 +324,7 @@ export default function ChatPage() {
           japanExperience: "first",
           foodStyle: "local",
           pace: "moderate",
-          additionalNotes: `${tripInfo.travelers || ""}\n\nIMPORTANT - USER REQUESTED CHANGE: ${adjustment}\n\nPlease adjust the itinerary according to this request.`,
+          additionalNotes: `${tripInfo.travelers || ""}\n\n=== USER REQUESTED CHANGE ===\n${adjustment}\n\nPlease adjust the itinerary to reflect this request while keeping other good parts intact.`,
         }),
       });
 
@@ -302,12 +332,105 @@ export default function ChatPage() {
 
       const data = await response.json();
       setItinerary(data);
-      addMessage("assistant", "Done! I've updated your itinerary. Take a look! Anything else you'd like to change?");
+      
+      // Remove "Updating..." message and add success
+      setMessages(prev => prev.slice(0, -1));
+      addMessage("assistant", "Updated! Take a look. Anything else?");
     } catch (error) {
-      addMessage("assistant", "Sorry, couldn't make that change. Could you try rephrasing?");
+      setMessages(prev => prev.slice(0, -1));
+      addMessage("assistant", "Couldn't make that change. Try rephrasing?");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // ============================================
+  // PDF EXPORT
+  // ============================================
+  const exportPDF = () => {
+    if (!itinerary) return;
+
+    const pdf = new jsPDF();
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const margin = 20;
+    const contentWidth = pageWidth - margin * 2;
+    let y = 20;
+
+    // Helper function
+    const addText = (text: string, fontSize: number, isBold = false, color = "#1c1917") => {
+      pdf.setFontSize(fontSize);
+      pdf.setFont("helvetica", isBold ? "bold" : "normal");
+      const rgb = parseInt(color.slice(1), 16);
+      pdf.setTextColor((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
+      
+      const lines = pdf.splitTextToSize(text, contentWidth);
+      lines.forEach((line: string) => {
+        if (y > 270) {
+          pdf.addPage();
+          y = 20;
+        }
+        pdf.text(line, margin, y);
+        y += fontSize * 0.5;
+      });
+      y += 2;
+    };
+
+    // Title
+    addText("JapanWise Itinerary", 24, true, "#b45309");
+    y += 5;
+
+    // Summary
+    if (itinerary.summary) {
+      addText(`${itinerary.summary.totalDays} Days | ${itinerary.summary.cities.join(" → ")}`, 12, false, "#78716c");
+      y += 10;
+    }
+
+    // Days
+    itinerary.itinerary.forEach((day) => {
+      if (y > 240) {
+        pdf.addPage();
+        y = 20;
+      }
+
+      addText(`Day ${day.day}: ${day.theme || day.city}`, 14, true);
+      addText(`${day.date} - ${day.city}`, 10, false, "#78716c");
+      y += 3;
+
+      day.activities.forEach((activity) => {
+        const icon = activity.type === "food" ? "[Food]" : activity.type === "stay" ? "[Stay]" : "[Activity]";
+        addText(`${activity.time} ${icon} ${activity.name}`, 11, true);
+        
+        if (activity.description) {
+          addText(activity.description, 10, false, "#57534e");
+        }
+        if (activity.tip) {
+          addText(`Tip: ${activity.tip}`, 9, false, "#b45309");
+        }
+        if (activity.reservation) {
+          addText(`Reservation: ${activity.reservation}`, 9, false, "#dc2626");
+        }
+        y += 2;
+      });
+
+      if (day.stayArea) {
+        addText(`Stay: ${day.stayArea}`, 10, false, "#4f46e5");
+      }
+      y += 8;
+    });
+
+    // Tips
+    if (itinerary.tips && itinerary.tips.length > 0) {
+      if (y > 240) {
+        pdf.addPage();
+        y = 20;
+      }
+      addText("Pro Tips", 14, true, "#b45309");
+      itinerary.tips.forEach((tip) => {
+        addText(`• ${tip}`, 10);
+      });
+    }
+
+    pdf.save("japanwise-itinerary.pdf");
   };
 
   // ============================================
@@ -328,7 +451,7 @@ export default function ChatPage() {
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAdjustment()}
+            onKeyDown={(e) => e.key === "Enter" && !isLoading && handleAdjustment()}
             placeholder="Tell me what to change..."
             className="flex-1 px-4 py-3 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
             disabled={isLoading}
@@ -417,13 +540,13 @@ export default function ChatPage() {
               onClick={() => handleButtonClick(option)}
               disabled={isGenerating}
               className={`w-full py-3 rounded-xl transition-colors flex items-center justify-center gap-2 ${
-                option.includes("Generate")
+                option.includes("Build")
                   ? "bg-amber-500 text-white hover:bg-amber-600"
                   : "bg-white text-stone-700 border border-stone-200 hover:border-amber-400"
               } disabled:opacity-50`}
             >
-              {isGenerating && option.includes("Generate") ? (
-                <><Loader2 className="w-5 h-5 animate-spin" /> Creating...</>
+              {isGenerating && option.includes("Build") ? (
+                <><Loader2 className="w-5 h-5 animate-spin" /> Building...</>
               ) : option}
             </button>
           ))}
@@ -549,6 +672,7 @@ export default function ChatPage() {
       );
     }
 
+    // ===== ITINERARY VIEW =====
     return (
       <div className="h-full flex flex-col">
         <div className="p-6 border-b border-stone-200 flex items-center justify-between">
@@ -556,8 +680,12 @@ export default function ChatPage() {
             <h2 className="text-xl font-semibold text-stone-800">Your Itinerary</h2>
             <p className="text-sm text-stone-500">{itinerary.summary?.totalDays} days • {itinerary.summary?.cities.join(" → ")}</p>
           </div>
-          <button className="p-2 text-stone-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg">
-            <FileDown className="w-5 h-5" />
+          <button 
+            onClick={exportPDF}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors"
+          >
+            <FileDown className="w-4 h-4" />
+            PDF
           </button>
         </div>
 
@@ -580,24 +708,36 @@ export default function ChatPage() {
                     <div className="absolute -left-[25px] w-3 h-3 bg-white border-2 border-stone-300 rounded-full" />
                     <div className={`p-3 rounded-lg ${
                       activity.type === "food" ? "bg-rose-50 border border-rose-200" :
+                      activity.type === "transport" ? "bg-blue-50 border border-blue-200" :
                       activity.type === "stay" ? "bg-indigo-50 border border-indigo-200" :
                       "bg-stone-50 border border-stone-200"
                     }`}>
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2">
                           {activity.type === "food" ? <Utensils className="w-4 h-4 text-rose-500" /> :
+                           activity.type === "transport" ? <Train className="w-4 h-4 text-blue-500" /> :
                            activity.type === "stay" ? <Hotel className="w-4 h-4 text-indigo-500" /> :
                            <Camera className="w-4 h-4 text-stone-500" />}
                           <span className="font-medium text-stone-800">{activity.name}</span>
                         </div>
                         <span className="text-xs text-stone-500">{activity.time}</span>
                       </div>
+                      
                       {activity.description && <p className="text-sm text-stone-600 mt-1">{activity.description}</p>}
+                      
                       {activity.tip && (
                         <p className="text-xs text-amber-700 mt-2 bg-amber-50 px-2 py-1 rounded">
-                          💡 {activity.tip}
+                          Tip: {activity.tip}
                         </p>
                       )}
+                      
+                      {activity.reservation && (
+                        <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          {activity.reservation}
+                        </p>
+                      )}
+                      
                       <div className="flex gap-3 mt-2 text-xs text-stone-500">
                         {activity.duration && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{activity.duration}</span>}
                         {(activity.cost || activity.price) && <span>{activity.cost || activity.price}</span>}
@@ -630,6 +770,7 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen flex flex-col bg-stone-50">
+      {/* Header */}
       <header className="bg-white border-b border-stone-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold text-stone-800">JapanWise</h1>
@@ -643,25 +784,27 @@ export default function ChatPage() {
         </button>
       </header>
 
+      {/* Progress */}
       <div className="bg-white border-b border-stone-200 px-4 py-2">
         <div className="flex items-center gap-3">
           <div className="flex-1 h-2 bg-stone-200 rounded-full overflow-hidden">
             <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${itinerary ? 100 : progress}%` }} />
           </div>
-          <span className="text-sm text-stone-500">{itinerary ? "Complete!" : `${Math.round(progress)}%`}</span>
-          {canGenerate && !itinerary && (
+          <span className="text-sm text-stone-500">{itinerary ? "Done!" : `${Math.round(progress)}%`}</span>
+          {canGenerate && !itinerary && !isGenerating && (
             <button
               onClick={handleGenerateNow}
-              disabled={isGenerating}
-              className="px-3 py-1 text-sm bg-amber-500 text-white rounded-full hover:bg-amber-600 disabled:opacity-50 flex items-center gap-1"
+              className="px-3 py-1 text-sm bg-amber-500 text-white rounded-full hover:bg-amber-600 flex items-center gap-1"
             >
-              <Sparkles className="w-3 h-3" /> Generate now
+              <Sparkles className="w-3 h-3" /> Build now
             </button>
           )}
         </div>
       </div>
 
+      {/* Main */}
       <div className="flex-1 flex overflow-hidden">
+        {/* Chat */}
         <div className={`flex-1 flex flex-col ${showMobileItinerary ? "hidden lg:flex" : "flex"}`}>
           <div className="flex-1 overflow-auto p-4 space-y-4">
             {messages.map((message) => (
@@ -679,7 +822,7 @@ export default function ChatPage() {
               <div className="flex justify-start">
                 <div className="bg-white border border-stone-200 rounded-2xl rounded-bl-md px-4 py-3">
                   <div className="flex items-center gap-2 text-stone-500">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Creating your trip...
+                    <Loader2 className="w-4 h-4 animate-spin" /> Building your perfect trip...
                   </div>
                 </div>
               </div>
@@ -689,6 +832,7 @@ export default function ChatPage() {
           <div className="border-t border-stone-200 bg-white p-4">{renderInput()}</div>
         </div>
 
+        {/* Itinerary Panel */}
         <div className={`w-full lg:w-[450px] bg-white border-l border-stone-200 ${showMobileItinerary ? "block" : "hidden lg:block"}`}>
           {renderItineraryPanel()}
         </div>
