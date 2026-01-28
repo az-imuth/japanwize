@@ -17,7 +17,8 @@ import {
   Menu,
   X,
   Train,
-  TicketCheck
+  TicketCheck,
+  Plane
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 
@@ -25,7 +26,7 @@ import { jsPDF } from "jspdf";
 // TYPES
 // ============================================
 type MessageRole = "assistant" | "user";
-type InputType = "text" | "calendar" | "buttons" | "multi-select";
+type InputType = "text" | "calendar" | "buttons" | "multi-select" | "buttons-with-other" | "airport-time";
 
 interface Message {
   id: string;
@@ -37,6 +38,10 @@ interface Message {
 
 interface TripInfo {
   dates?: { start: string; end: string };
+  arrivalAirport?: string;
+  arrivalTime?: string;
+  departureAirport?: string;
+  departureTime?: string;
   travelers?: string;
   cities?: string[];
   mustDo?: string[];
@@ -80,10 +85,32 @@ interface Itinerary {
 }
 
 // ============================================
+// AIRPORTS
+// ============================================
+const JAPAN_AIRPORTS = [
+  { code: "NRT", name: "Tokyo Narita (NRT)", city: "Tokyo" },
+  { code: "HND", name: "Tokyo Haneda (HND)", city: "Tokyo" },
+  { code: "KIX", name: "Osaka Kansai (KIX)", city: "Osaka" },
+  { code: "ITM", name: "Osaka Itami (ITM)", city: "Osaka" },
+  { code: "NGO", name: "Nagoya Centrair (NGO)", city: "Nagoya" },
+  { code: "FUK", name: "Fukuoka (FUK)", city: "Fukuoka" },
+  { code: "CTS", name: "Sapporo New Chitose (CTS)", city: "Sapporo" },
+  { code: "OKA", name: "Okinawa Naha (OKA)", city: "Okinawa" },
+];
+
+const TIME_OPTIONS = [
+  "Early morning (before 9am)",
+  "Morning (9am-12pm)",
+  "Afternoon (12pm-5pm)",
+  "Evening (5pm-9pm)",
+  "Night (after 9pm)",
+];
+
+// ============================================
 // PHASES - Required + Optional questions
 // ============================================
 const PHASES = [
-  // === REQUIRED (1-4) ===
+  // === REQUIRED (1-5) ===
   { 
     id: 1, 
     name: "Dates", 
@@ -93,13 +120,29 @@ const PHASES = [
   },
   { 
     id: 2, 
+    name: "Arrival", 
+    question: "Which airport are you flying into, and what time do you land?", 
+    inputType: "airport-time" as InputType,
+    isArrival: true,
+    required: true,
+  },
+  { 
+    id: 3, 
+    name: "Departure", 
+    question: "Which airport are you flying out of, and what time is your flight?", 
+    inputType: "airport-time" as InputType,
+    isArrival: false,
+    required: true,
+  },
+  { 
+    id: 4, 
     name: "Travelers", 
     question: "Who's joining you? Tell me about your group!\n\n(e.g., \"Me and my girlfriend, both late 20s\" or \"Family with 2 kids, ages 8 and 12\")", 
     inputType: "text" as InputType,
     required: true,
   },
   { 
-    id: 3, 
+    id: 5, 
     name: "Cities", 
     question: "Which areas do you want to visit?", 
     inputType: "multi-select" as InputType, 
@@ -107,39 +150,39 @@ const PHASES = [
     required: true,
   },
   { 
-    id: 4, 
+    id: 6, 
     name: "Must-do", 
     question: "Any must-dos? Places, foods, experiences you absolutely want?\n\n(e.g., \"TeamLab, sushi at Tsukiji, see Mt. Fuji\" or type \"skip\")", 
     inputType: "text" as InputType,
     required: true,
   },
-  // === OPTIONAL (5-8) ===
+  // === OPTIONAL (7-10) ===
   { 
-    id: 5, 
+    id: 7, 
     name: "Experience", 
     question: "Have you been to Japan before?", 
-    inputType: "buttons" as InputType, 
+    inputType: "buttons-with-other" as InputType, 
     options: ["First time! 🎌", "Been once before", "I'm a regular"],
     required: false,
   },
   { 
-    id: 6, 
+    id: 8, 
     name: "Pace", 
     question: "What's your travel pace?", 
-    inputType: "buttons" as InputType, 
+    inputType: "buttons-with-other" as InputType, 
     options: ["Relaxed — quality over quantity", "Moderate — balanced mix", "Pack it in — see everything!"],
     required: false,
   },
   { 
-    id: 7, 
+    id: 9, 
     name: "Food", 
     question: "How about food?", 
-    inputType: "buttons" as InputType, 
+    inputType: "buttons-with-other" as InputType, 
     options: ["Budget friendly 🍙", "Local favorites 🍜", "Foodie spots 🍣", "High-end dining 🥢"],
     required: false,
   },
   { 
-    id: 8, 
+    id: 10, 
     name: "Extra", 
     question: "Anything else I should know?\n\n(Dietary needs, things to avoid, special occasions, etc. Or type \"done\" to generate!)", 
     inputType: "text" as InputType,
@@ -147,7 +190,7 @@ const PHASES = [
   },
 ];
 
-const REQUIRED_PHASES = 4;
+const REQUIRED_PHASES = 6;
 const TOTAL_PHASES = PHASES.length;
 
 // ============================================
@@ -158,7 +201,7 @@ export default function ChatPage() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Hey! I'm JapanWise — your friend who lives in Japan. 🇯🇵\n\nI'll help you build a trip that actually works:\n• Efficient routes\n• Realistic timing\n• What needs reservations\n• How to get between spots\n\nLet me ask you a few questions, then we'll build your perfect itinerary together!",
+      content: "Hey! I'm JapanWise — your friend who lives in Japan. 🇯🇵\n\nI'll help you build a trip that actually works:\n• Efficient routes based on your flight times\n• Realistic timing with transport included\n• What needs reservations\n• Local spots you won't find in guidebooks\n\nLet me ask you a few questions, then we'll build your perfect itinerary together!",
     },
     {
       id: "phase-1",
@@ -173,6 +216,9 @@ export default function ChatPage() {
   const [inputValue, setInputValue] = useState("");
   const [selectedDates, setSelectedDates] = useState<{ start: string; end: string }>({ start: "", end: "" });
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  const [selectedAirport, setSelectedAirport] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
+  const [showOtherInput, setShowOtherInput] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showMobileItinerary, setShowMobileItinerary] = useState(false);
@@ -187,6 +233,13 @@ export default function ChatPage() {
   useEffect(() => {
     if (!isGenerating && !isLoading) inputRef.current?.focus();
   }, [currentPhase, isGenerating, isLoading]);
+
+  // Reset other input when phase changes
+  useEffect(() => {
+    setShowOtherInput(false);
+    setSelectedAirport("");
+    setSelectedTime("");
+  }, [currentPhase]);
 
   // ============================================
   // HANDLERS
@@ -214,6 +267,28 @@ export default function ChatPage() {
     moveToNextPhase();
   };
 
+  const handleAirportTimeSubmit = (isArrival: boolean) => {
+    if (!selectedAirport || !selectedTime) return;
+
+    const airportName = JAPAN_AIRPORTS.find(a => a.code === selectedAirport)?.name || selectedAirport;
+    addMessage("user", `${airportName}, ${selectedTime}`);
+    
+    if (isArrival) {
+      setTripInfo((prev) => ({ 
+        ...prev, 
+        arrivalAirport: selectedAirport,
+        arrivalTime: selectedTime 
+      }));
+    } else {
+      setTripInfo((prev) => ({ 
+        ...prev, 
+        departureAirport: selectedAirport,
+        departureTime: selectedTime 
+      }));
+    }
+    moveToNextPhase();
+  };
+
   const handleCityToggle = (city: string) => {
     setSelectedCities((prev) =>
       prev.includes(city) ? prev.filter((c) => c !== city) : [...prev, city]
@@ -235,13 +310,13 @@ export default function ChatPage() {
     addMessage("user", value);
 
     // Update trip info based on current phase
-    if (currentPhase === 2) {
+    if (currentPhase === 4) {
       setTripInfo((prev) => ({ ...prev, travelers: value }));
-    } else if (currentPhase === 4) {
+    } else if (currentPhase === 6) {
       if (value.toLowerCase() !== "skip") {
         setTripInfo((prev) => ({ ...prev, mustDo: [value] }));
       }
-    } else if (currentPhase === 8) {
+    } else if (currentPhase === 10) {
       if (value.toLowerCase() !== "done") {
         setTripInfo((prev) => ({ ...prev, additionalNotes: value }));
       }
@@ -249,10 +324,10 @@ export default function ChatPage() {
 
     setInputValue("");
 
-    // Phase 8 "done" triggers generation
-    if (currentPhase === 8 && value.toLowerCase() === "done") {
+    // Phase 10 "done" triggers generation
+    if (currentPhase === 10 && value.toLowerCase() === "done") {
       generateItinerary();
-    } else if (currentPhase === 8) {
+    } else if (currentPhase === 10) {
       // After adding extra notes, generate
       generateItinerary();
     } else {
@@ -264,17 +339,17 @@ export default function ChatPage() {
     addMessage("user", option);
 
     // Map button selection to trip info
-    if (currentPhase === 5) {
+    if (currentPhase === 7) {
       let exp = "first";
       if (option.includes("once")) exp = "second";
       if (option.includes("regular")) exp = "repeat";
       setTripInfo((prev) => ({ ...prev, japanExperience: exp }));
-    } else if (currentPhase === 6) {
+    } else if (currentPhase === 8) {
       let pace = "moderate";
       if (option.includes("Relaxed")) pace = "slow";
       if (option.includes("Pack")) pace = "fast";
       setTripInfo((prev) => ({ ...prev, pace }));
-    } else if (currentPhase === 7) {
+    } else if (currentPhase === 9) {
       let food = "local";
       if (option.includes("Budget")) food = "budget";
       if (option.includes("Foodie")) food = "foodie";
@@ -282,6 +357,26 @@ export default function ChatPage() {
       setTripInfo((prev) => ({ ...prev, foodStyle: food }));
     }
 
+    moveToNextPhase();
+  };
+
+  const handleOtherSubmit = () => {
+    if (!inputValue.trim()) return;
+    
+    const value = inputValue.trim();
+    addMessage("user", value);
+
+    // Store the custom response
+    if (currentPhase === 7) {
+      setTripInfo((prev) => ({ ...prev, japanExperience: value }));
+    } else if (currentPhase === 8) {
+      setTripInfo((prev) => ({ ...prev, pace: value }));
+    } else if (currentPhase === 9) {
+      setTripInfo((prev) => ({ ...prev, foodStyle: value }));
+    }
+
+    setInputValue("");
+    setShowOtherInput(false);
     moveToNextPhase();
   };
 
@@ -340,7 +435,7 @@ export default function ChatPage() {
 
   const generateItinerary = async () => {
     setIsGenerating(true);
-    addMessage("assistant", "Building your trip... \n\nI'm working out the best routes, checking what needs reservations, and making sure the timing actually works. ~30 seconds. ✨");
+    addMessage("assistant", "Building your trip... \n\nI'm checking your flight times, working out the best routes, and making sure Day 1 and your last day are realistic. ~30 seconds. ✨");
 
     try {
       const travelerType = parseTravelerType(tripInfo.travelers || "");
@@ -351,6 +446,10 @@ export default function ChatPage() {
         body: JSON.stringify({
           startDate: tripInfo.dates?.start,
           endDate: tripInfo.dates?.end,
+          arrivalAirport: tripInfo.arrivalAirport || "NRT",
+          arrivalTime: tripInfo.arrivalTime || "Afternoon (12pm-5pm)",
+          departureAirport: tripInfo.departureAirport || tripInfo.arrivalAirport || "NRT",
+          departureTime: tripInfo.departureTime || "Afternoon (12pm-5pm)",
           travelerType,
           cities: tripInfo.cities?.map((c) => c.toLowerCase()) || ["tokyo"],
           mustVisit: tripInfo.mustDo?.join(", ") || "",
@@ -368,7 +467,7 @@ export default function ChatPage() {
 
       addMessage(
         "assistant",
-        `Done! 🎉 Here's your ${data.summary?.totalDays || ""}-day trip.\n\nCheck the itinerary on the right. Each spot has transport info and reservation notes.\n\nWant to change anything? Just tell me:\n• \"Day 2 is too packed\"\n• \"Add more ramen spots\"\n• \"Make mornings start later\"\n• \"Switch Day 3 and 4\"`
+        `Done! 🎉 Here's your ${data.summary?.totalDays || ""}-day trip.\n\nI've planned around your ${tripInfo.arrivalAirport || "arrival"} landing and ${tripInfo.departureAirport || "departure"} flight times.\n\nWant to change anything? Just tell me:\n• \"Day 2 is too packed\"\n• \"Add more ramen spots\"\n• \"Make mornings start later\"\n• \"Switch Day 3 and 4\"`
       );
     } catch (error) {
       console.error("Generation error:", error);
@@ -398,6 +497,10 @@ export default function ChatPage() {
         body: JSON.stringify({
           startDate: tripInfo.dates?.start,
           endDate: tripInfo.dates?.end,
+          arrivalAirport: tripInfo.arrivalAirport || "NRT",
+          arrivalTime: tripInfo.arrivalTime || "Afternoon (12pm-5pm)",
+          departureAirport: tripInfo.departureAirport || tripInfo.arrivalAirport || "NRT",
+          departureTime: tripInfo.departureTime || "Afternoon (12pm-5pm)",
           travelerType,
           cities: tripInfo.cities?.map((c) => c.toLowerCase()) || ["tokyo"],
           mustVisit: tripInfo.mustDo?.join(", ") || "",
@@ -519,11 +622,17 @@ export default function ChatPage() {
     : 0;
   const progress = itinerary ? 100 : Math.round(requiredProgress + optionalProgress);
   
-  const canGenerate = currentPhase > REQUIRED_PHASES || (tripInfo.dates && tripInfo.cities && tripInfo.cities.length > 0);
+  const canGenerate = currentPhase > REQUIRED_PHASES || (
+    tripInfo.dates && 
+    tripInfo.arrivalAirport && 
+    tripInfo.cities && 
+    tripInfo.cities.length > 0
+  );
 
   const renderInput = () => {
     const lastMessage = messages[messages.length - 1];
     const inputType = lastMessage?.inputType;
+    const currentPhaseData = PHASES[currentPhase - 1];
 
     if (itinerary) {
       return (
@@ -584,6 +693,60 @@ export default function ChatPage() {
       );
     }
 
+    if (inputType === "airport-time") {
+      const isArrival = currentPhaseData?.isArrival ?? true;
+      return (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm text-stone-500 mb-2">Airport</label>
+            <div className="grid grid-cols-2 gap-2">
+              {JAPAN_AIRPORTS.map((airport) => (
+                <button
+                  key={airport.code}
+                  onClick={() => setSelectedAirport(airport.code)}
+                  className={`px-3 py-2 rounded-lg border text-left text-sm transition-colors ${
+                    selectedAirport === airport.code
+                      ? "bg-amber-500 text-white border-amber-500"
+                      : "bg-white text-stone-700 border-stone-200 hover:border-amber-400"
+                  }`}
+                >
+                  <div className="font-medium">{airport.code}</div>
+                  <div className="text-xs opacity-75">{airport.city}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm text-stone-500 mb-2">
+              {isArrival ? "Landing time" : "Departure time"}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {TIME_OPTIONS.map((time) => (
+                <button
+                  key={time}
+                  onClick={() => setSelectedTime(time)}
+                  className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
+                    selectedTime === time
+                      ? "bg-amber-500 text-white border-amber-500"
+                      : "bg-white text-stone-700 border-stone-200 hover:border-amber-400"
+                  }`}
+                >
+                  {time}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={() => handleAirportTimeSubmit(isArrival)}
+            disabled={!selectedAirport || !selectedTime}
+            className="w-full py-3 bg-amber-500 text-white rounded-xl hover:bg-amber-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+          >
+            Continue <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      );
+    }
+
     if (inputType === "multi-select" && lastMessage?.options) {
       return (
         <div className="space-y-3">
@@ -608,6 +771,60 @@ export default function ChatPage() {
             className="w-full py-3 bg-amber-500 text-white rounded-xl hover:bg-amber-600 disabled:opacity-50 transition-colors"
           >
             Continue with {selectedCities.length} {selectedCities.length === 1 ? "city" : "cities"}
+          </button>
+        </div>
+      );
+    }
+
+    if (inputType === "buttons-with-other" && lastMessage?.options) {
+      if (showOtherInput) {
+        return (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleOtherSubmit()}
+                placeholder="Tell me more..."
+                className="flex-1 px-4 py-3 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+              <button
+                onClick={handleOtherSubmit}
+                disabled={!inputValue.trim()}
+                className="px-4 py-3 bg-amber-500 text-white rounded-xl hover:bg-amber-600 disabled:opacity-50 transition-colors"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </div>
+            <button
+              onClick={() => setShowOtherInput(false)}
+              className="text-sm text-stone-500 hover:text-stone-700"
+            >
+              ← Back to options
+            </button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex flex-col gap-2">
+          {lastMessage.options.map((option) => (
+            <button
+              key={option}
+              onClick={() => handleButtonClick(option)}
+              disabled={isGenerating}
+              className="w-full py-3 rounded-xl transition-colors bg-white text-stone-700 border border-stone-200 hover:border-amber-400 hover:bg-amber-50 disabled:opacity-50"
+            >
+              {option}
+            </button>
+          ))}
+          <button
+            onClick={() => setShowOtherInput(true)}
+            className="w-full py-3 rounded-xl transition-colors bg-stone-50 text-stone-500 border border-dashed border-stone-300 hover:border-amber-400 hover:bg-amber-50"
+          >
+            Other... (type your own)
           </button>
         </div>
       );
@@ -682,6 +899,28 @@ export default function ChatPage() {
               </div>
             )}
 
+            {tripInfo.arrivalAirport ? (
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                <div className="flex items-center gap-2 text-amber-700 font-medium mb-1">
+                  <Plane className="w-4 h-4" /> Flights
+                </div>
+                <p className="text-stone-700 text-sm">
+                  Arrive: {tripInfo.arrivalAirport} ({tripInfo.arrivalTime})
+                </p>
+                {tripInfo.departureAirport && (
+                  <p className="text-stone-700 text-sm">
+                    Depart: {tripInfo.departureAirport} ({tripInfo.departureTime})
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="p-4 bg-stone-50 rounded-xl border border-dashed border-stone-300">
+                <div className="flex items-center gap-2 text-stone-400">
+                  <Plane className="w-4 h-4" /> Flights?
+                </div>
+              </div>
+            )}
+
             {tripInfo.travelers ? (
               <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
                 <div className="flex items-center gap-2 text-amber-700 font-medium mb-1">
@@ -731,7 +970,7 @@ export default function ChatPage() {
             {(tripInfo.japanExperience || tripInfo.pace || tripInfo.foodStyle) && (
               <div className="p-4 bg-stone-50 rounded-xl border border-stone-200">
                 <div className="text-sm text-stone-500 space-y-1">
-                  {tripInfo.japanExperience && <p>Experience: {tripInfo.japanExperience === "first" ? "First time" : tripInfo.japanExperience === "second" ? "Been once" : "Regular"}</p>}
+                  {tripInfo.japanExperience && <p>Experience: {tripInfo.japanExperience}</p>}
                   {tripInfo.pace && <p>Pace: {tripInfo.pace}</p>}
                   {tripInfo.foodStyle && <p>Food: {tripInfo.foodStyle}</p>}
                 </div>
