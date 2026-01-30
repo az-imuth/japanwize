@@ -8,6 +8,8 @@ import {
   MapPin, 
   Sparkles,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Loader2,
   Clock,
   Utensils,
@@ -142,19 +144,11 @@ const JAPAN_AIRPORTS = [
   { code: "OKA", name: "Okinawa Naha (OKA)", city: "Okinawa" },
 ];
 
-const TIME_OPTIONS = [
-  "Early morning (before 9am)",
-  "Morning (9am-12pm)",
-  "Afternoon (12pm-5pm)",
-  "Evening (5pm-9pm)",
-  "Night (after 9pm)",
-];
-
 // ============================================
 // PHASES - Required + Optional questions
 // ============================================
 const PHASES = [
-  // === REQUIRED (1-5) ===
+  // === REQUIRED (1-6) ===
   { 
     id: 1, 
     name: "Dates", 
@@ -238,6 +232,18 @@ const REQUIRED_PHASES = 6;
 const TOTAL_PHASES = PHASES.length;
 
 // ============================================
+// HELPER: Format time for display
+// ============================================
+function formatTimeDisplay(time: string): string {
+  if (!time) return "";
+  const [hours, minutes] = time.split(":");
+  const h = parseInt(hours);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${minutes} ${ampm}`;
+}
+
+// ============================================
 // MAIN COMPONENT
 // ============================================
 export default function ChatPage() {
@@ -266,6 +272,7 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showMobileItinerary, setShowMobileItinerary] = useState(false);
+  const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -284,6 +291,20 @@ export default function ChatPage() {
     setSelectedAirport("");
     setSelectedTime("");
   }, [currentPhase]);
+
+  // Toggle activity expansion
+  const toggleActivity = (dayIdx: number, activityIdx: number) => {
+    const key = `${dayIdx}-${activityIdx}`;
+    setExpandedActivities(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
 
   // ============================================
   // HANDLERS
@@ -315,7 +336,8 @@ export default function ChatPage() {
     if (!selectedAirport || !selectedTime) return;
 
     const airportName = JAPAN_AIRPORTS.find(a => a.code === selectedAirport)?.name || selectedAirport;
-    addMessage("user", `${airportName}, ${selectedTime}`);
+    const timeDisplay = formatTimeDisplay(selectedTime);
+    addMessage("user", `${airportName}, ${timeDisplay}`);
     
     if (isArrival) {
       setTripInfo((prev) => ({ 
@@ -491,9 +513,9 @@ export default function ChatPage() {
           startDate: tripInfo.dates?.start,
           endDate: tripInfo.dates?.end,
           arrivalAirport: tripInfo.arrivalAirport || "NRT",
-          arrivalTime: tripInfo.arrivalTime || "Afternoon (12pm-5pm)",
+          arrivalTime: tripInfo.arrivalTime || "14:00",
           departureAirport: tripInfo.departureAirport || tripInfo.arrivalAirport || "NRT",
-          departureTime: tripInfo.departureTime || "Afternoon (12pm-5pm)",
+          departureTime: tripInfo.departureTime || "14:00",
           travelerType,
           cities: tripInfo.cities?.map((c) => c.toLowerCase()) || ["tokyo"],
           mustVisit: tripInfo.mustDo?.join(", ") || "",
@@ -542,9 +564,9 @@ export default function ChatPage() {
           startDate: tripInfo.dates?.start,
           endDate: tripInfo.dates?.end,
           arrivalAirport: tripInfo.arrivalAirport || "NRT",
-          arrivalTime: tripInfo.arrivalTime || "Afternoon (12pm-5pm)",
+          arrivalTime: tripInfo.arrivalTime || "14:00",
           departureAirport: tripInfo.departureAirport || tripInfo.arrivalAirport || "NRT",
-          departureTime: tripInfo.departureTime || "Afternoon (12pm-5pm)",
+          departureTime: tripInfo.departureTime || "14:00",
           travelerType,
           cities: tripInfo.cities?.map((c) => c.toLowerCase()) || ["tokyo"],
           mustVisit: tripInfo.mustDo?.join(", ") || "",
@@ -570,7 +592,7 @@ export default function ChatPage() {
   };
 
   // ============================================
-  // PDF EXPORT
+  // PDF EXPORT - SIMPLIFIED VERSION
   // ============================================
   const exportPDF = () => {
     if (!itinerary) return;
@@ -581,77 +603,106 @@ export default function ChatPage() {
     const contentWidth = pageWidth - margin * 2;
     let y = 20;
 
-    const addText = (text: string, fontSize: number, isBold = false, color = "#1c1917") => {
-      pdf.setFontSize(fontSize);
-      pdf.setFont("helvetica", isBold ? "bold" : "normal");
-      const rgb = parseInt(color.slice(1), 16);
-      pdf.setTextColor((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
-      
-      const lines = pdf.splitTextToSize(text, contentWidth);
-      lines.forEach((line: string) => {
-        if (y > 270) {
-          pdf.addPage();
-          y = 20;
-        }
-        pdf.text(line, margin, y);
-        y += fontSize * 0.5;
-      });
-      y += 2;
-    };
-
-    addText("JapanWise Itinerary", 24, true, "#b45309");
-    y += 5;
-
-    if (itinerary.summary) {
-      addText(`${itinerary.summary.totalDays} Days | ${itinerary.summary.cities.join(" -> ")}`, 12, false, "#78716c");
-      y += 10;
-    }
-
-    itinerary.itinerary.forEach((day) => {
-      if (y > 240) {
+    const checkNewPage = (needed: number) => {
+      if (y + needed > 270) {
         pdf.addPage();
         y = 20;
       }
+    };
 
-      addText(`Day ${day.day}: ${day.theme || day.city}`, 14, true);
-      addText(`${day.date} - ${day.city}`, 10, false, "#78716c");
-      y += 3;
+    // Title
+    pdf.setFontSize(22);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(180, 83, 9); // amber-700
+    pdf.text("JapanWise Itinerary", margin, y);
+    y += 10;
 
+    // Summary line
+    if (itinerary.summary) {
+      pdf.setFontSize(11);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(120, 113, 108); // stone-500
+      pdf.text(`${itinerary.summary.totalDays} Days • ${itinerary.summary.cities.join(" → ")}`, margin, y);
+      y += 15;
+    }
+
+    // Separator line
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 10;
+
+    // Each day - SIMPLIFIED
+    itinerary.itinerary.forEach((day) => {
+      checkNewPage(50);
+
+      // Day header
+      pdf.setFontSize(13);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(28, 25, 23); // stone-900
+      pdf.text(`Day ${day.day} — ${day.city}`, margin, y);
+      y += 5;
+
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(120, 113, 108);
+      pdf.text(`${day.date}${day.theme ? ` • ${day.theme}` : ""}`, margin, y);
+      y += 8;
+
+      // Activities - simplified (time, name, transport only)
       day.activities.forEach((activity) => {
-        const icon = activity.type === "food" ? "[Food]" : activity.type === "stay" ? "[Stay]" : "[Activity]";
-        addText(`${activity.time} ${icon} ${activity.name}`, 11, true);
+        checkNewPage(15);
         
-        if (activity.description) {
-          addText(activity.description, 10, false, "#57534e");
-        }
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(28, 25, 23);
+        
+        const typeIcon = activity.type === "food" ? "🍽" : activity.type === "stay" ? "🏨" : "📍";
+        const activityLine = `${activity.time}  ${typeIcon} ${activity.name}`;
+        pdf.text(activityLine, margin + 5, y);
+        y += 5;
+
+        // Transport info (important for navigation)
         if (activity.transport) {
-          addText(`Transport: ${activity.transport}`, 9, false, "#3b82f6");
+          pdf.setFontSize(9);
+          pdf.setFont("helvetica", "normal");
+          pdf.setTextColor(59, 130, 246); // blue-500
+          const transportLines = pdf.splitTextToSize(`→ ${activity.transport}`, contentWidth - 10);
+          transportLines.forEach((line: string) => {
+            checkNewPage(5);
+            pdf.text(line, margin + 10, y);
+            y += 4;
+          });
         }
+
+        // Reservation warning (critical info)
         if (activity.reservation && activity.reservation !== "Not needed" && activity.reservation !== "Walk-in OK") {
-          addText(`Reservation: ${activity.reservation}`, 9, false, "#dc2626");
+          pdf.setFontSize(9);
+          pdf.setFont("helvetica", "normal");
+          pdf.setTextColor(220, 38, 38); // red-600
+          pdf.text(`⚠ ${activity.reservation}`, margin + 10, y);
+          y += 4;
         }
-        if (activity.tip) {
-          addText(`Tip: ${activity.tip}`, 9, false, "#b45309");
-        }
+
         y += 2;
       });
 
+      // Stay area
       if (day.stayArea) {
-        addText(`Stay: ${day.stayArea}`, 10, false, "#4f46e5");
+        checkNewPage(8);
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(79, 70, 229); // indigo-600
+        pdf.text(`🏨 Stay: ${day.stayArea}`, margin + 5, y);
+        y += 6;
       }
+
       y += 8;
     });
 
-    if (itinerary.tips && itinerary.tips.length > 0) {
-      if (y > 240) {
-        pdf.addPage();
-        y = 20;
-      }
-      addText("Pro Tips", 14, true, "#b45309");
-      itinerary.tips.forEach((tip) => {
-        addText(`- ${tip}`, 10);
-      });
-    }
+    // Footer
+    pdf.setFontSize(8);
+    pdf.setTextColor(150, 150, 150);
+    pdf.text("Generated by JapanWise • japanwise.app", margin, 285);
 
     pdf.save("japanwise-itinerary.pdf");
   };
@@ -737,6 +788,7 @@ export default function ChatPage() {
       );
     }
 
+    // ===== UPDATED: Airport + Time Input (specific time) =====
     if (inputType === "airport-time") {
       const isArrival = currentPhaseData?.isArrival ?? true;
       return (
@@ -764,21 +816,17 @@ export default function ChatPage() {
             <label className="block text-sm text-stone-500 mb-2">
               {isArrival ? "Landing time" : "Departure time"}
             </label>
-            <div className="flex flex-wrap gap-2">
-              {TIME_OPTIONS.map((time) => (
-                <button
-                  key={time}
-                  onClick={() => setSelectedTime(time)}
-                  className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
-                    selectedTime === time
-                      ? "bg-amber-500 text-white border-amber-500"
-                      : "bg-white text-stone-700 border-stone-200 hover:border-amber-400"
-                  }`}
-                >
-                  {time}
-                </button>
-              ))}
-            </div>
+            <input
+              type="time"
+              value={selectedTime}
+              onChange={(e) => setSelectedTime(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-400 text-lg"
+            />
+            <p className="text-xs text-stone-400 mt-1">
+              {isArrival 
+                ? "What time does your flight land in Japan?" 
+                : "What time does your flight depart from Japan?"}
+            </p>
           </div>
           <button
             onClick={() => handleAirportTimeSubmit(isArrival)}
@@ -949,11 +997,11 @@ export default function ChatPage() {
                   <Plane className="w-4 h-4" /> Flights
                 </div>
                 <p className="text-stone-700 text-sm">
-                  Arrive: {tripInfo.arrivalAirport} ({tripInfo.arrivalTime})
+                  Arrive: {tripInfo.arrivalAirport} ({tripInfo.arrivalTime ? formatTimeDisplay(tripInfo.arrivalTime) : ""})
                 </p>
                 {tripInfo.departureAirport && (
                   <p className="text-stone-700 text-sm">
-                    Depart: {tripInfo.departureAirport} ({tripInfo.departureTime})
+                    Depart: {tripInfo.departureAirport} ({tripInfo.departureTime ? formatTimeDisplay(tripInfo.departureTime) : ""})
                   </p>
                 )}
               </div>
@@ -1042,7 +1090,7 @@ export default function ChatPage() {
       );
     }
 
-    // ===== ITINERARY VIEW WITH KLOOK BUTTONS =====
+    // ===== ITINERARY VIEW WITH ACCORDION =====
     return (
       <div className="h-full flex flex-col">
         <div className="p-6 border-b border-stone-200 flex items-center justify-between">
@@ -1060,7 +1108,7 @@ export default function ChatPage() {
         </div>
 
         <div className="flex-1 p-6 overflow-auto space-y-6">
-          {itinerary.itinerary.map((day) => (
+          {itinerary.itinerary.map((day, dayIdx) => (
             <div key={day.day} className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-amber-500 text-white rounded-full flex items-center justify-center font-semibold">
@@ -1072,67 +1120,95 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              <div className="ml-5 pl-5 border-l-2 border-stone-200 space-y-3">
-                {day.activities.map((activity, idx) => {
+              <div className="ml-5 pl-5 border-l-2 border-stone-200 space-y-2">
+                {day.activities.map((activity, activityIdx) => {
                   const isFood = activity.type === "food";
                   const klookLink = !isFood ? getKlookLink(activity.name) : null;
+                  const isExpanded = expandedActivities.has(`${dayIdx}-${activityIdx}`);
+                  const hasDetails = activity.description || activity.tip || activity.transport || 
+                    (activity.reservation && activity.reservation !== "Not needed" && activity.reservation !== "Walk-in OK") ||
+                    klookLink;
                   
                   return (
-                    <div key={idx} className="relative">
+                    <div key={activityIdx} className="relative">
                       <div className="absolute -left-[25px] w-3 h-3 bg-white border-2 border-stone-300 rounded-full" />
-                      <div className={`p-3 rounded-lg ${
-                        activity.type === "food" ? "bg-rose-50 border border-rose-200" :
-                        activity.type === "stay" ? "bg-indigo-50 border border-indigo-200" :
-                        "bg-stone-50 border border-stone-200"
-                      }`}>
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2">
-                            {activity.type === "food" ? <Utensils className="w-4 h-4 text-rose-500" /> :
-                             activity.type === "stay" ? <Hotel className="w-4 h-4 text-indigo-500" /> :
-                             <Camera className="w-4 h-4 text-stone-500" />}
-                            <span className="font-medium text-stone-800">{activity.name}</span>
+                      <div 
+                        className={`rounded-lg transition-all ${
+                          activity.type === "food" ? "bg-rose-50 border border-rose-200" :
+                          activity.type === "stay" ? "bg-indigo-50 border border-indigo-200" :
+                          "bg-stone-50 border border-stone-200"
+                        }`}
+                      >
+                        {/* Collapsed View - Always visible */}
+                        <button
+                          onClick={() => hasDetails && toggleActivity(dayIdx, activityIdx)}
+                          className={`w-full p-3 text-left ${hasDetails ? "cursor-pointer hover:bg-black/5" : "cursor-default"}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {activity.type === "food" ? <Utensils className="w-4 h-4 text-rose-500" /> :
+                               activity.type === "stay" ? <Hotel className="w-4 h-4 text-indigo-500" /> :
+                               <Camera className="w-4 h-4 text-stone-500" />}
+                              <span className="font-medium text-stone-800">{activity.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-stone-500">{activity.time}</span>
+                              {hasDetails && (
+                                isExpanded 
+                                  ? <ChevronUp className="w-4 h-4 text-stone-400" />
+                                  : <ChevronDown className="w-4 h-4 text-stone-400" />
+                              )}
+                            </div>
                           </div>
-                          <span className="text-xs text-stone-500">{activity.time}</span>
-                        </div>
-                        
-                        {activity.description && <p className="text-sm text-stone-600 mt-1">{activity.description}</p>}
-                        
-                        {activity.transport && (
-                          <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
-                            <Train className="w-3 h-3" />
-                            {activity.transport}
-                          </p>
-                        )}
-                        
-                        {activity.reservation && activity.reservation !== "Not needed" && activity.reservation !== "Walk-in OK" && (
-                          <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                            <TicketCheck className="w-3 h-3" />
-                            {activity.reservation}
-                          </p>
-                        )}
-                        
-                        {activity.tip && (
-                          <p className="text-xs text-amber-700 mt-2 bg-amber-50 px-2 py-1 rounded">
-                            💡 {activity.tip}
-                          </p>
-                        )}
-                        
-                        <div className="flex gap-3 mt-2 text-xs text-stone-500">
-                          {activity.duration && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{activity.duration}</span>}
-                          {(activity.cost || activity.price) && <span>{activity.cost || activity.price}</span>}
-                        </div>
+                          
+                          {/* Quick info always visible */}
+                          <div className="flex gap-3 mt-1 text-xs text-stone-500">
+                            {activity.duration && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{activity.duration}</span>}
+                            {(activity.cost || activity.price) && <span>{activity.cost || activity.price}</span>}
+                          </div>
+                        </button>
 
-                        {/* KLOOK BUTTON */}
-                        {klookLink && (
-                          <a
-                            href={klookLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium rounded-full transition-colors"
-                          >
-                            Book on Klook
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
+                        {/* Expanded Details */}
+                        {isExpanded && hasDetails && (
+                          <div className="px-3 pb-3 pt-1 border-t border-stone-200/50 space-y-2">
+                            {activity.description && (
+                              <p className="text-sm text-stone-600">{activity.description}</p>
+                            )}
+                            
+                            {activity.transport && (
+                              <p className="text-xs text-blue-600 flex items-center gap-1">
+                                <Train className="w-3 h-3" />
+                                {activity.transport}
+                              </p>
+                            )}
+                            
+                            {activity.reservation && activity.reservation !== "Not needed" && activity.reservation !== "Walk-in OK" && (
+                              <p className="text-xs text-red-600 flex items-center gap-1">
+                                <TicketCheck className="w-3 h-3" />
+                                {activity.reservation}
+                              </p>
+                            )}
+                            
+                            {activity.tip && (
+                              <p className="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded">
+                                💡 {activity.tip}
+                              </p>
+                            )}
+
+                            {/* KLOOK BUTTON */}
+                            {klookLink && (
+                              <a
+                                href={klookLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium rounded-full transition-colors"
+                              >
+                                Book on Klook
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
