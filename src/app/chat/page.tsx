@@ -18,9 +18,53 @@ import {
   X,
   Train,
   TicketCheck,
-  Plane
+  Plane,
+  ExternalLink,
+  Eye
 } from "lucide-react";
 import { jsPDF } from "jspdf";
+
+// ============================================
+// KLOOK AFFILIATE INTEGRATION
+// ============================================
+const KLOOK_AID = "109190";
+
+const KLOOK_KEYWORDS = [
+  { keywords: ["teamlab", "team lab"], searchTerm: "teamlab tokyo" },
+  { keywords: ["skytree", "sky tree"], searchTerm: "tokyo skytree" },
+  { keywords: ["tokyo tower"], searchTerm: "tokyo tower" },
+  { keywords: ["disneysea", "disney sea"], searchTerm: "tokyo disneysea" },
+  { keywords: ["disneyland"], searchTerm: "tokyo disneyland" },
+  { keywords: ["universal studios", "usj"], searchTerm: "universal studios japan" },
+  { keywords: ["aquarium", "kaiyukan"], searchTerm: "osaka aquarium" },
+  { keywords: ["jr pass", "rail pass"], searchTerm: "jr pass" },
+  { keywords: ["ghibli museum"], searchTerm: "ghibli museum" },
+  { keywords: ["shibuya sky"], searchTerm: "shibuya sky" },
+  { keywords: ["cup noodle museum", "cup noodles museum"], searchTerm: "cup noodle museum" },
+  { keywords: ["kimono rental", "kimono experience"], searchTerm: "kimono rental kyoto" },
+  { keywords: ["tea ceremony"], searchTerm: "tea ceremony kyoto" },
+  { keywords: ["sumo"], searchTerm: "sumo tokyo" },
+  { keywords: ["cooking class"], searchTerm: "cooking class japan" },
+  { keywords: ["mount fuji", "mt fuji", "mt. fuji"], searchTerm: "mount fuji day trip" },
+  { keywords: ["hakone"], searchTerm: "hakone day trip" },
+  { keywords: ["nara park", "nara day trip"], searchTerm: "nara day trip" },
+  { keywords: ["fushimi inari tour"], searchTerm: "fushimi inari tour" },
+  { keywords: ["arashiyama"], searchTerm: "arashiyama tour" },
+  { keywords: ["nintendo"], searchTerm: "nintendo kyoto" },
+  { keywords: ["onsen", "hot spring"], searchTerm: "onsen japan" },
+];
+
+function getKlookLink(activityName: string): string | null {
+  const nameLower = activityName.toLowerCase();
+  for (const item of KLOOK_KEYWORDS) {
+    for (const keyword of item.keywords) {
+      if (nameLower.includes(keyword)) {
+        return `https://www.klook.com/en-US/search/result/?query=${encodeURIComponent(item.searchTerm)}&aid=${KLOOK_AID}`;
+      }
+    }
+  }
+  return null;
+}
 
 // ============================================
 // TYPES
@@ -998,7 +1042,7 @@ export default function ChatPage() {
       );
     }
 
-    // ===== ITINERARY VIEW =====
+    // ===== ITINERARY VIEW WITH KLOOK BUTTONS =====
     return (
       <div className="h-full flex flex-col">
         <div className="p-6 border-b border-stone-200 flex items-center justify-between">
@@ -1029,53 +1073,71 @@ export default function ChatPage() {
               </div>
 
               <div className="ml-5 pl-5 border-l-2 border-stone-200 space-y-3">
-                {day.activities.map((activity, idx) => (
-                  <div key={idx} className="relative">
-                    <div className="absolute -left-[25px] w-3 h-3 bg-white border-2 border-stone-300 rounded-full" />
-                    <div className={`p-3 rounded-lg ${
-                      activity.type === "food" ? "bg-rose-50 border border-rose-200" :
-                      activity.type === "stay" ? "bg-indigo-50 border border-indigo-200" :
-                      "bg-stone-50 border border-stone-200"
-                    }`}>
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                          {activity.type === "food" ? <Utensils className="w-4 h-4 text-rose-500" /> :
-                           activity.type === "stay" ? <Hotel className="w-4 h-4 text-indigo-500" /> :
-                           <Camera className="w-4 h-4 text-stone-500" />}
-                          <span className="font-medium text-stone-800">{activity.name}</span>
+                {day.activities.map((activity, idx) => {
+                  const isFood = activity.type === "food";
+                  const klookLink = !isFood ? getKlookLink(activity.name) : null;
+                  
+                  return (
+                    <div key={idx} className="relative">
+                      <div className="absolute -left-[25px] w-3 h-3 bg-white border-2 border-stone-300 rounded-full" />
+                      <div className={`p-3 rounded-lg ${
+                        activity.type === "food" ? "bg-rose-50 border border-rose-200" :
+                        activity.type === "stay" ? "bg-indigo-50 border border-indigo-200" :
+                        "bg-stone-50 border border-stone-200"
+                      }`}>
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2">
+                            {activity.type === "food" ? <Utensils className="w-4 h-4 text-rose-500" /> :
+                             activity.type === "stay" ? <Hotel className="w-4 h-4 text-indigo-500" /> :
+                             <Camera className="w-4 h-4 text-stone-500" />}
+                            <span className="font-medium text-stone-800">{activity.name}</span>
+                          </div>
+                          <span className="text-xs text-stone-500">{activity.time}</span>
                         </div>
-                        <span className="text-xs text-stone-500">{activity.time}</span>
-                      </div>
-                      
-                      {activity.description && <p className="text-sm text-stone-600 mt-1">{activity.description}</p>}
-                      
-                      {activity.transport && (
-                        <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
-                          <Train className="w-3 h-3" />
-                          {activity.transport}
-                        </p>
-                      )}
-                      
-                      {activity.reservation && activity.reservation !== "Not needed" && activity.reservation !== "Walk-in OK" && (
-                        <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                          <TicketCheck className="w-3 h-3" />
-                          {activity.reservation}
-                        </p>
-                      )}
-                      
-                      {activity.tip && (
-                        <p className="text-xs text-amber-700 mt-2 bg-amber-50 px-2 py-1 rounded">
-                          💡 {activity.tip}
-                        </p>
-                      )}
-                      
-                      <div className="flex gap-3 mt-2 text-xs text-stone-500">
-                        {activity.duration && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{activity.duration}</span>}
-                        {(activity.cost || activity.price) && <span>{activity.cost || activity.price}</span>}
+                        
+                        {activity.description && <p className="text-sm text-stone-600 mt-1">{activity.description}</p>}
+                        
+                        {activity.transport && (
+                          <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
+                            <Train className="w-3 h-3" />
+                            {activity.transport}
+                          </p>
+                        )}
+                        
+                        {activity.reservation && activity.reservation !== "Not needed" && activity.reservation !== "Walk-in OK" && (
+                          <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                            <TicketCheck className="w-3 h-3" />
+                            {activity.reservation}
+                          </p>
+                        )}
+                        
+                        {activity.tip && (
+                          <p className="text-xs text-amber-700 mt-2 bg-amber-50 px-2 py-1 rounded">
+                            💡 {activity.tip}
+                          </p>
+                        )}
+                        
+                        <div className="flex gap-3 mt-2 text-xs text-stone-500">
+                          {activity.duration && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{activity.duration}</span>}
+                          {(activity.cost || activity.price) && <span>{activity.cost || activity.price}</span>}
+                        </div>
+
+                        {/* KLOOK BUTTON */}
+                        {klookLink && (
+                          <a
+                            href={klookLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium rounded-full transition-colors"
+                          >
+                            Book on Klook
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {day.stayArea && <div className="ml-5 pl-5 text-sm text-indigo-600">🏨 Stay: {day.stayArea}</div>}
@@ -1115,24 +1177,6 @@ export default function ChatPage() {
         </button>
       </header>
 
-      {/* Progress */}
-      <div className="bg-white border-b border-stone-200 px-4 py-2">
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-2 bg-stone-200 rounded-full overflow-hidden">
-            <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${progress}%` }} />
-          </div>
-          <span className="text-sm text-stone-500">{itinerary ? "Done!" : `${progress}%`}</span>
-          {canGenerate && !itinerary && !isGenerating && (
-            <button
-              onClick={handleGenerateNow}
-              className="px-3 py-1 text-sm bg-amber-500 text-white rounded-full hover:bg-amber-600 flex items-center gap-1"
-            >
-              <Sparkles className="w-3 h-3" /> Build now
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Main */}
       <div className="flex-1 flex overflow-hidden">
         {/* Chat */}
@@ -1160,7 +1204,45 @@ export default function ChatPage() {
             )}
             <div ref={messagesEndRef} />
           </div>
-          <div className="border-t border-stone-200 bg-white p-4">{renderInput()}</div>
+          
+          {/* Input + Bottom Bar */}
+          <div className="border-t border-stone-200 bg-white">
+            {/* Input Area */}
+            <div className="p-4 pb-2">{renderInput()}</div>
+            
+            {/* Bottom Progress Bar + Buttons */}
+            <div className="px-4 pb-4 pt-2 border-t border-stone-100">
+              <div className="flex items-center gap-3">
+                {/* Progress Bar */}
+                <div className="flex-1 flex items-center gap-2">
+                  <div className="flex-1 h-2 bg-stone-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+                  </div>
+                  <span className="text-xs text-stone-500 w-12">{itinerary ? "Done!" : `${progress}%`}</span>
+                </div>
+                
+                {/* Build Now Button */}
+                {canGenerate && !itinerary && !isGenerating && (
+                  <button
+                    onClick={handleGenerateNow}
+                    className="px-4 py-2 text-sm bg-amber-500 text-white rounded-full hover:bg-amber-600 flex items-center gap-2 font-medium shadow-lg shadow-amber-500/25"
+                  >
+                    <Sparkles className="w-4 h-4" /> Build now
+                  </button>
+                )}
+                
+                {/* Mobile View Itinerary Button */}
+                {itinerary && (
+                  <button
+                    onClick={() => setShowMobileItinerary(true)}
+                    className="lg:hidden px-4 py-2 text-sm bg-stone-800 text-white rounded-full hover:bg-stone-700 flex items-center gap-2 font-medium"
+                  >
+                    <Eye className="w-4 h-4" /> View Itinerary
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Itinerary Panel */}
