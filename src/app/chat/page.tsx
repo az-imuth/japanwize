@@ -482,7 +482,7 @@ function ItineraryMap({ itinerary, selectedDay }: { itinerary: Itinerary; select
         if (filteredMarkers.length > 1) {
           const bounds = new google.maps.LatLngBounds();
           filteredMarkers.forEach(m => bounds.extend(m.position));
-          map.fitBounds(bounds, { padding: 50 });
+          map.fitBounds(bounds, 50);
         }
 
         setMapLoaded(true);
