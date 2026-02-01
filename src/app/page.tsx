@@ -1,6 +1,6 @@
 'use client';
 
-import { MapPin, Clock, Sparkles, ChevronDown, Utensils, Train, Camera, Star, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { MapPin, Clock, Sparkles, ChevronDown, Utensils, Train, Camera, Star, ArrowRight, CheckCircle2, X, MessageSquare, Zap, Globe, AlertTriangle } from 'lucide-react';
 
 export default function Home() {
   return (
@@ -24,7 +24,7 @@ export default function Home() {
             {/* Left: Copy */}
             <div className="text-left">
               <p className="text-amber-400 text-sm font-medium tracking-[0.3em] uppercase mb-6">
-                Your Gateway to Japan
+                Your AI Friend Who Lives in Japan
               </p>
               <h1 className="text-4xl md:text-6xl font-light text-white mb-6 leading-tight tracking-tight">
                 Discover the<br />
@@ -219,6 +219,145 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* ================================================ */}
+      {/* NEW: Why JapanWise vs ChatGPT Section */}
+      {/* ================================================ */}
+      <section className="py-24 bg-white">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <p className="text-amber-600 text-sm font-medium tracking-[0.2em] uppercase mb-4">
+              The Difference
+            </p>
+            <h2 className="text-3xl md:text-4xl font-light text-stone-900 tracking-tight mb-4">
+              Why not just use ChatGPT?
+            </h2>
+            <p className="text-stone-500 max-w-2xl mx-auto">
+              General AI is great for many things. But for Japan travel, you need a specialist.
+            </p>
+          </div>
+
+          {/* Comparison Table */}
+          <div className="bg-stone-50 rounded-3xl p-8 mb-16">
+            <div className="grid md:grid-cols-3 gap-6">
+              {/* Header Row */}
+              <div className="hidden md:block"></div>
+              <div className="text-center p-4">
+                <div className="inline-flex items-center gap-2 bg-stone-200 text-stone-600 px-4 py-2 rounded-full text-sm font-medium">
+                  <MessageSquare className="w-4 h-4" />
+                  ChatGPT / Claude
+                </div>
+              </div>
+              <div className="text-center p-4">
+                <div className="inline-flex items-center gap-2 bg-amber-400 text-stone-900 px-4 py-2 rounded-full text-sm font-medium">
+                  <Zap className="w-4 h-4" />
+                  JapanWise
+                </div>
+              </div>
+
+              {/* Row 1: Restaurant Names */}
+              <div className="flex items-center p-4 font-medium text-stone-700">
+                Restaurant Recommendations
+              </div>
+              <div className="p-4 bg-white rounded-xl">
+                <p className="text-stone-500 text-sm">"Try a sushi restaurant in Tsukiji area"</p>
+                <p className="text-xs text-stone-400 mt-2">Generic, no specifics</p>
+              </div>
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                <p className="text-stone-700 text-sm">"Sushi Dai, Bldg 6 — arrive 5am, worth the wait. Order omakase (¥4,000)"</p>
+                <p className="text-xs text-amber-600 mt-2">Specific, actionable</p>
+              </div>
+
+              {/* Row 2: Reservations */}
+              <div className="flex items-center p-4 font-medium text-stone-700">
+                Reservation Alerts
+              </div>
+              <div className="p-4 bg-white rounded-xl">
+                <div className="flex items-center gap-2 text-stone-400">
+                  <X className="w-4 h-4" />
+                  <span className="text-sm">Not mentioned</span>
+                </div>
+              </div>
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                <div className="flex items-center gap-2 text-emerald-600">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span className="text-sm">"TeamLab requires booking 2 weeks ahead"</span>
+                </div>
+              </div>
+
+              {/* Row 3: Transport */}
+              <div className="flex items-center p-4 font-medium text-stone-700">
+                Transport Details
+              </div>
+              <div className="p-4 bg-white rounded-xl">
+                <p className="text-stone-500 text-sm">"Take the train from Tokyo to Kyoto"</p>
+              </div>
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                <p className="text-stone-700 text-sm">"Hikari #513, Track 14, ¥13,320 — reserve window seat Row D for Mt. Fuji view"</p>
+              </div>
+
+              {/* Row 4: Local Tips */}
+              <div className="flex items-center p-4 font-medium text-stone-700">
+                Insider Tips
+              </div>
+              <div className="p-4 bg-white rounded-xl">
+                <div className="flex items-center gap-2 text-stone-400">
+                  <X className="w-4 h-4" />
+                  <span className="text-sm">Basic tourist info</span>
+                </div>
+              </div>
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                <p className="text-stone-700 text-sm">"Fushimi Inari at 6am — no crowds, magical light. Start from the back entrance."</p>
+              </div>
+
+              {/* Row 5: Hallucination */}
+              <div className="flex items-center p-4 font-medium text-stone-700">
+                Accuracy
+              </div>
+              <div className="p-4 bg-white rounded-xl">
+                <div className="flex items-center gap-2 text-red-500">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="text-sm">May suggest places that don't exist</span>
+                </div>
+              </div>
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                <div className="flex items-center gap-2 text-emerald-600">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span className="text-sm">Japan-specific training, verified spots</span>
+                </div>
+              </div>
+
+              {/* Row 6: Output */}
+              <div className="flex items-center p-4 font-medium text-stone-700">
+                Output Format
+              </div>
+              <div className="p-4 bg-white rounded-xl">
+                <p className="text-stone-500 text-sm">Wall of text you need to organize yourself</p>
+              </div>
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                <p className="text-stone-700 text-sm">Ready-to-use itinerary with times, maps, and PDF export</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Quote */}
+          <div className="text-center max-w-2xl mx-auto">
+            <p className="text-xl text-stone-600 italic mb-6">
+              "ChatGPT knows everything. JapanWise knows Japan."
+            </p>
+            <a
+              href="/chat"
+              className="group inline-flex items-center justify-center gap-2 bg-stone-900 text-white text-base font-medium px-8 py-4 rounded-full hover:bg-amber-500 transition-all duration-300"
+            >
+              Try JapanWise Free
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </a>
+          </div>
+        </div>
+      </section>
+      {/* ================================================ */}
+      {/* END: Why JapanWise vs ChatGPT Section */}
+      {/* ================================================ */}
 
       {/* Philosophy Section */}
       <section className="py-24 bg-stone-900 text-white">
