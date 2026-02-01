@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { 
   Send, 
   Calendar, 
@@ -24,7 +24,11 @@ import {
   ExternalLink,
   Eye,
   List,
-  Map
+  Map,
+  Thermometer,
+  Shirt,
+  Wallet,
+  Wifi
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 
@@ -70,7 +74,6 @@ const loadGoogleMaps = (): Promise<void> => {
 // JAPAN LOCATION DATA (for geocoding fallback)
 // ============================================
 const JAPAN_LOCATIONS: { [key: string]: { lat: number; lng: number } } = {
-  // Cities
   "tokyo": { lat: 35.6762, lng: 139.6503 },
   "kyoto": { lat: 35.0116, lng: 135.7681 },
   "osaka": { lat: 34.6937, lng: 135.5023 },
@@ -81,7 +84,6 @@ const JAPAN_LOCATIONS: { [key: string]: { lat: number; lng: number } } = {
   "fukuoka": { lat: 33.5902, lng: 130.4017 },
   "sapporo": { lat: 43.0618, lng: 141.3545 },
   "okinawa": { lat: 26.2124, lng: 127.6809 },
-  // Popular spots
   "senso-ji": { lat: 35.7148, lng: 139.7967 },
   "sensoji": { lat: 35.7148, lng: 139.7967 },
   "asakusa": { lat: 35.7148, lng: 139.7967 },
@@ -103,7 +105,6 @@ const JAPAN_LOCATIONS: { [key: string]: { lat: number; lng: number } } = {
   "odaiba": { lat: 35.6290, lng: 139.7798 },
   "roppongi": { lat: 35.6627, lng: 139.7318 },
   "imperial palace": { lat: 35.6852, lng: 139.7528 },
-  // Kyoto
   "fushimi inari": { lat: 34.9671, lng: 135.7727 },
   "kinkaku-ji": { lat: 35.0394, lng: 135.7292 },
   "kinkakuji": { lat: 35.0394, lng: 135.7292 },
@@ -114,17 +115,14 @@ const JAPAN_LOCATIONS: { [key: string]: { lat: number; lng: number } } = {
   "kiyomizu-dera": { lat: 34.9949, lng: 135.7850 },
   "kiyomizudera": { lat: 34.9949, lng: 135.7850 },
   "nijo castle": { lat: 35.0142, lng: 135.7481 },
-  // Osaka
   "dotonbori": { lat: 34.6687, lng: 135.5031 },
   "osaka castle": { lat: 34.6873, lng: 135.5262 },
   "shinsekai": { lat: 34.6524, lng: 135.5063 },
   "universal studios japan": { lat: 34.6654, lng: 135.4323 },
   "usj": { lat: 34.6654, lng: 135.4323 },
-  // Nara
   "nara park": { lat: 34.6851, lng: 135.8430 },
   "todai-ji": { lat: 34.6890, lng: 135.8399 },
   "todaiji": { lat: 34.6890, lng: 135.8399 },
-  // Other
   "mount fuji": { lat: 35.3606, lng: 138.7274 },
   "mt fuji": { lat: 35.3606, lng: 138.7274 },
   "mt. fuji": { lat: 35.3606, lng: 138.7274 },
@@ -137,12 +135,7 @@ const JAPAN_LOCATIONS: { [key: string]: { lat: number; lng: number } } = {
 };
 
 function getLocationCoords(name: string, city: string): { lat: number; lng: number } | null {
-  const searchTerms = [
-    name.toLowerCase(),
-    `${name} ${city}`.toLowerCase(),
-    city.toLowerCase()
-  ];
-  
+  const searchTerms = [name.toLowerCase(), `${name} ${city}`.toLowerCase(), city.toLowerCase()];
   for (const term of searchTerms) {
     for (const [key, coords] of Object.entries(JAPAN_LOCATIONS)) {
       if (term.includes(key) || key.includes(term.split(' ')[0])) {
@@ -150,18 +143,66 @@ function getLocationCoords(name: string, city: string): { lat: number; lng: numb
       }
     }
   }
-  
-  // Default to city center if available
   const cityLower = city.toLowerCase();
   if (JAPAN_LOCATIONS[cityLower]) {
-    // Add small random offset so markers don't stack
     return {
       lat: JAPAN_LOCATIONS[cityLower].lat + (Math.random() - 0.5) * 0.01,
       lng: JAPAN_LOCATIONS[cityLower].lng + (Math.random() - 0.5) * 0.01
     };
   }
-  
   return null;
+}
+
+// ============================================
+// FLIGHT TIME LOGIC - 空港→市街地の移動時間
+// ============================================
+interface AirportTransitInfo {
+  immigrationMinutes: number;  // 入国審査＋荷物受取
+  toCityMinutes: number;       // 空港→市街地
+  fromCityMinutes: number;     // 市街地→空港
+  checkInMinutes: number;      // 出発前のチェックイン余裕
+  nearestCity: string;
+}
+
+const AIRPORT_TRANSIT: { [code: string]: AirportTransitInfo } = {
+  NRT: { immigrationMinutes: 60, toCityMinutes: 90, fromCityMinutes: 90, checkInMinutes: 150, nearestCity: "Tokyo" },
+  HND: { immigrationMinutes: 45, toCityMinutes: 30, fromCityMinutes: 40, checkInMinutes: 120, nearestCity: "Tokyo" },
+  KIX: { immigrationMinutes: 50, toCityMinutes: 75, fromCityMinutes: 75, checkInMinutes: 150, nearestCity: "Osaka" },
+  ITM: { immigrationMinutes: 30, toCityMinutes: 30, fromCityMinutes: 30, checkInMinutes: 90, nearestCity: "Osaka" },
+  NGO: { immigrationMinutes: 45, toCityMinutes: 45, fromCityMinutes: 45, checkInMinutes: 120, nearestCity: "Nagoya" },
+  FUK: { immigrationMinutes: 40, toCityMinutes: 15, fromCityMinutes: 20, checkInMinutes: 90, nearestCity: "Fukuoka" },
+  CTS: { immigrationMinutes: 45, toCityMinutes: 45, fromCityMinutes: 45, checkInMinutes: 120, nearestCity: "Sapporo" },
+  OKA: { immigrationMinutes: 40, toCityMinutes: 20, fromCityMinutes: 25, checkInMinutes: 90, nearestCity: "Naha" },
+};
+
+function calculateActualStartTime(arrivalAirport: string, landingTime: string): { time: string; explanation: string } {
+  const transit = AIRPORT_TRANSIT[arrivalAirport] || AIRPORT_TRANSIT.NRT;
+  const [hours, minutes] = landingTime.split(":").map(Number);
+  const landingMinutes = hours * 60 + minutes;
+  const actualStartMinutes = landingMinutes + transit.immigrationMinutes + transit.toCityMinutes;
+  
+  const startHours = Math.floor(actualStartMinutes / 60) % 24;
+  const startMins = actualStartMinutes % 60;
+  const startTime = `${startHours.toString().padStart(2, "0")}:${startMins.toString().padStart(2, "0")}`;
+  
+  const explanation = `Landing ${landingTime} + immigration/baggage (~${transit.immigrationMinutes}min) + transit to ${transit.nearestCity} (~${transit.toCityMinutes}min) = ready by ~${formatTimeDisplay(startTime)}`;
+  
+  return { time: startTime, explanation };
+}
+
+function calculateLastDayEndTime(departureAirport: string, flightTime: string): { time: string; explanation: string } {
+  const transit = AIRPORT_TRANSIT[departureAirport] || AIRPORT_TRANSIT.NRT;
+  const [hours, minutes] = flightTime.split(":").map(Number);
+  const flightMinutes = hours * 60 + minutes;
+  const mustLeaveByMinutes = flightMinutes - transit.checkInMinutes - transit.fromCityMinutes;
+  
+  const leaveHours = Math.floor(mustLeaveByMinutes / 60);
+  const leaveMins = mustLeaveByMinutes % 60;
+  const leaveTime = `${Math.max(0, leaveHours).toString().padStart(2, "0")}:${Math.max(0, leaveMins).toString().padStart(2, "0")}`;
+  
+  const explanation = `Flight ${flightTime} - check-in (~${transit.checkInMinutes}min) - transit to ${departureAirport} (~${transit.fromCityMinutes}min) = leave hotel by ~${formatTimeDisplay(leaveTime)}`;
+  
+  return { time: leaveTime, explanation };
 }
 
 // ============================================
@@ -259,6 +300,14 @@ interface Activity {
   transport?: string;
 }
 
+interface ProTips {
+  weather?: string;
+  clothing?: string;
+  transport?: string;
+  money?: string;
+  connectivity?: string;
+}
+
 interface Itinerary {
   summary?: {
     totalDays: number;
@@ -267,6 +316,7 @@ interface Itinerary {
   };
   itinerary: DayPlan[];
   tips?: string[];
+  proTips?: ProTips;
 }
 
 interface MapMarker {
@@ -323,6 +373,28 @@ function formatTimeDisplay(time: string): string {
 }
 
 // ============================================
+// PRO TIPS ICON COMPONENT
+// ============================================
+function ProTipIcon({ type }: { type: keyof ProTips }) {
+  switch (type) {
+    case "weather": return <Thermometer className="w-4 h-4 text-blue-500" />;
+    case "clothing": return <Shirt className="w-4 h-4 text-purple-500" />;
+    case "transport": return <Train className="w-4 h-4 text-green-500" />;
+    case "money": return <Wallet className="w-4 h-4 text-amber-500" />;
+    case "connectivity": return <Wifi className="w-4 h-4 text-cyan-500" />;
+    default: return <Sparkles className="w-4 h-4 text-stone-500" />;
+  }
+}
+
+const PRO_TIP_LABELS: { [key in keyof ProTips]: string } = {
+  weather: "Weather",
+  clothing: "What to Pack",
+  transport: "Getting Around",
+  money: "Money Tips",
+  connectivity: "Staying Connected",
+};
+
+// ============================================
 // MAP COMPONENT
 // ============================================
 function ItineraryMap({ itinerary, selectedDay }: { itinerary: Itinerary; selectedDay: number | null }) {
@@ -332,7 +404,6 @@ function ItineraryMap({ itinerary, selectedDay }: { itinerary: Itinerary; select
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
 
-  // Generate markers from itinerary
   const markers: MapMarker[] = [];
   itinerary.itinerary.forEach((day) => {
     day.activities.forEach((activity) => {
@@ -350,10 +421,7 @@ function ItineraryMap({ itinerary, selectedDay }: { itinerary: Itinerary; select
     });
   });
 
-  // Filter markers by selected day
-  const filteredMarkers = selectedDay 
-    ? markers.filter(m => m.day === selectedDay)
-    : markers;
+  const filteredMarkers = selectedDay ? markers.filter(m => m.day === selectedDay) : markers;
 
   useEffect(() => {
     const initMap = async () => {
@@ -362,15 +430,13 @@ function ItineraryMap({ itinerary, selectedDay }: { itinerary: Itinerary; select
       try {
         await loadGoogleMaps();
         
-        // Calculate center and bounds
-        let center = { lat: 35.6762, lng: 139.6503 }; // Default: Tokyo
+        let center = { lat: 35.6762, lng: 139.6503 };
         if (filteredMarkers.length > 0) {
           const avgLat = filteredMarkers.reduce((sum, m) => sum + m.position.lat, 0) / filteredMarkers.length;
           const avgLng = filteredMarkers.reduce((sum, m) => sum + m.position.lng, 0) / filteredMarkers.length;
           center = { lat: avgLat, lng: avgLng };
         }
 
-        // Create map
         const map = new google.maps.Map(mapRef.current, {
           center,
           zoom: filteredMarkers.length > 1 ? 12 : 14,
@@ -384,12 +450,9 @@ function ItineraryMap({ itinerary, selectedDay }: { itinerary: Itinerary; select
         });
 
         mapInstanceRef.current = map;
-
-        // Clear existing markers
         markersRef.current.forEach(m => m.setMap(null));
         markersRef.current = [];
 
-        // Add markers
         filteredMarkers.forEach((marker) => {
           const markerColor = marker.type === "food" ? "#f43f5e" : marker.type === "stay" ? "#6366f1" : "#f59e0b";
           
@@ -397,12 +460,7 @@ function ItineraryMap({ itinerary, selectedDay }: { itinerary: Itinerary; select
             position: marker.position,
             map,
             title: marker.title,
-            label: {
-              text: marker.day.toString(),
-              color: "white",
-              fontSize: "12px",
-              fontWeight: "bold",
-            },
+            label: { text: marker.day.toString(), color: "white", fontSize: "12px", fontWeight: "bold" },
             icon: {
               path: google.maps.SymbolPath.CIRCLE,
               scale: 14,
@@ -413,24 +471,14 @@ function ItineraryMap({ itinerary, selectedDay }: { itinerary: Itinerary; select
             },
           });
 
-          // Info window
           const infoWindow = new google.maps.InfoWindow({
-            content: `
-              <div style="padding: 8px; max-width: 200px;">
-                <p style="font-weight: 600; margin: 0 0 4px 0;">${marker.title}</p>
-                <p style="font-size: 12px; color: #666; margin: 0;">Day ${marker.day}${marker.time ? ` • ${marker.time}` : ''}</p>
-              </div>
-            `,
+            content: `<div style="padding: 8px; max-width: 200px;"><p style="font-weight: 600; margin: 0 0 4px 0;">${marker.title}</p><p style="font-size: 12px; color: #666; margin: 0;">Day ${marker.day}${marker.time ? ` • ${marker.time}` : ''}</p></div>`,
           });
 
-          mapMarker.addListener("click", () => {
-            infoWindow.open(map, mapMarker);
-          });
-
+          mapMarker.addListener("click", () => infoWindow.open(map, mapMarker));
           markersRef.current.push(mapMarker);
         });
 
-        // Fit bounds if multiple markers
         if (filteredMarkers.length > 1) {
           const bounds = new google.maps.LatLngBounds();
           filteredMarkers.forEach(m => bounds.extend(m.position));
@@ -440,7 +488,7 @@ function ItineraryMap({ itinerary, selectedDay }: { itinerary: Itinerary; select
         setMapLoaded(true);
       } catch (error) {
         console.error("Map error:", error);
-        setMapError("Failed to load map");
+        setMapError("Failed to load map. Check your API key.");
       }
     };
 
@@ -450,20 +498,22 @@ function ItineraryMap({ itinerary, selectedDay }: { itinerary: Itinerary; select
   if (mapError) {
     return (
       <div className="h-full flex items-center justify-center bg-stone-100 rounded-lg">
-        <p className="text-stone-500">{mapError}</p>
+        <div className="text-center p-4">
+          <Map className="w-8 h-8 text-stone-400 mx-auto mb-2" />
+          <p className="text-stone-500 text-sm">{mapError}</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="relative h-full">
-      <div ref={mapRef} className="w-full h-full rounded-lg" />
+    <div className="relative h-full min-h-[300px]">
+      <div ref={mapRef} className="w-full h-full rounded-lg" style={{ minHeight: "300px" }} />
       {!mapLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-stone-100 rounded-lg">
           <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
         </div>
       )}
-      {/* Legend */}
       <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-sm rounded-lg p-3 shadow-lg">
         <div className="flex items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5">
@@ -489,7 +539,7 @@ function ItineraryMap({ itinerary, selectedDay }: { itinerary: Itinerary; select
 // ============================================
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([
-    { id: "welcome", role: "assistant", content: "Hey! I'm JapanWise — your friend who lives in Japan. 🇯🇵\n\nI'll help you build a trip that actually works:\n• Efficient routes based on your flight times\n• Realistic timing with transport included\n• What needs reservations\n• Local spots you won't find in guidebooks\n\nLet me ask you a few questions, then we'll build your perfect itinerary together!" },
+    { id: "welcome", role: "assistant", content: "Hey! I'm JapanWise — your friend who lives in Japan. 🇯🇵\n\nI'll help you build a trip that actually works:\n• Realistic Day 1 based on your landing time\n• Last day planned around your departure\n• What needs reservations\n• Local spots you won't find in guidebooks\n\nLet me ask you a few questions, then we'll build your perfect itinerary together!" },
     { id: "phase-1", role: "assistant", content: PHASES[0].question, inputType: PHASES[0].inputType },
   ]);
   const [currentPhase, setCurrentPhase] = useState(1);
@@ -655,7 +705,13 @@ export default function ChatPage() {
 
   const generateItinerary = async () => {
     setIsGenerating(true);
-    addMessage("assistant", "Building your trip... \n\nI'm checking your flight times, working out the best routes, and making sure Day 1 and your last day are realistic. ~30 seconds. ✨");
+    
+    // Calculate actual usable times based on flights
+    const arrivalCalc = calculateActualStartTime(tripInfo.arrivalAirport || "NRT", tripInfo.arrivalTime || "14:00");
+    const departureCalc = calculateLastDayEndTime(tripInfo.departureAirport || tripInfo.arrivalAirport || "NRT", tripInfo.departureTime || "14:00");
+    
+    addMessage("assistant", `Building your trip... ✨\n\n📍 Day 1: ${arrivalCalc.explanation}\n📍 Last day: ${departureCalc.explanation}\n\nMaking sure your itinerary is realistic! ~30 seconds.`);
+    
     try {
       const travelerType = parseTravelerType(tripInfo.travelers || "");
       const response = await fetch("/api/generate", {
@@ -666,8 +722,10 @@ export default function ChatPage() {
           endDate: tripInfo.dates?.end,
           arrivalAirport: tripInfo.arrivalAirport || "NRT",
           arrivalTime: tripInfo.arrivalTime || "14:00",
+          actualStartTime: arrivalCalc.time,  // NEW: Actual usable start time
           departureAirport: tripInfo.departureAirport || tripInfo.arrivalAirport || "NRT",
           departureTime: tripInfo.departureTime || "14:00",
+          mustLeaveBy: departureCalc.time,    // NEW: Must leave hotel by this time
           travelerType,
           cities: tripInfo.cities?.map((c) => c.toLowerCase()) || ["tokyo"],
           mustVisit: tripInfo.mustDo?.join(", ") || "",
@@ -680,7 +738,7 @@ export default function ChatPage() {
       if (!response.ok) throw new Error("Failed to generate");
       const data = await response.json();
       setItinerary(data);
-      addMessage("assistant", `Done! 🎉 Here's your ${data.summary?.totalDays || ""}-day trip.\n\nI've planned around your ${tripInfo.arrivalAirport || "arrival"} landing and ${tripInfo.departureAirport || "departure"} flight times.\n\nWant to change anything? Just tell me:\n• \"Day 2 is too packed\"\n• \"Add more ramen spots\"\n• \"Make mornings start later\"\n• \"Switch Day 3 and 4\"`);
+      addMessage("assistant", `Done! 🎉 Here's your ${data.summary?.totalDays || ""}-day trip.\n\nDay 1 starts at ${formatTimeDisplay(arrivalCalc.time)} (after you clear immigration and get to the city).\nLast day ends by ${formatTimeDisplay(departureCalc.time)} (to catch your flight).\n\nWant to change anything? Just tell me:\n• \"Day 2 is too packed\"\n• \"Add more ramen spots\"\n• \"Make mornings start later\"`);
     } catch (error) {
       console.error("Generation error:", error);
       addMessage("assistant", "Sorry, something went wrong. Let me try again...");
@@ -697,6 +755,9 @@ export default function ChatPage() {
     setIsLoading(true);
     try {
       const travelerType = parseTravelerType(tripInfo.travelers || "");
+      const arrivalCalc = calculateActualStartTime(tripInfo.arrivalAirport || "NRT", tripInfo.arrivalTime || "14:00");
+      const departureCalc = calculateLastDayEndTime(tripInfo.departureAirport || tripInfo.arrivalAirport || "NRT", tripInfo.departureTime || "14:00");
+      
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -705,8 +766,10 @@ export default function ChatPage() {
           endDate: tripInfo.dates?.end,
           arrivalAirport: tripInfo.arrivalAirport || "NRT",
           arrivalTime: tripInfo.arrivalTime || "14:00",
+          actualStartTime: arrivalCalc.time,
           departureAirport: tripInfo.departureAirport || tripInfo.arrivalAirport || "NRT",
           departureTime: tripInfo.departureTime || "14:00",
+          mustLeaveBy: departureCalc.time,
           travelerType,
           cities: tripInfo.cities?.map((c) => c.toLowerCase()) || ["tokyo"],
           mustVisit: tripInfo.mustDo?.join(", ") || "",
@@ -734,7 +797,6 @@ export default function ChatPage() {
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.getWidth();
     const margin = 20;
-    const contentWidth = pageWidth - margin * 2;
     let y = 20;
 
     const checkNewPage = (needed: number) => { if (y + needed > 270) { pdf.addPage(); y = 20; } };
@@ -782,12 +844,11 @@ export default function ChatPage() {
           pdf.setFontSize(9);
           pdf.setFont("helvetica", "normal");
           pdf.setTextColor(59, 130, 246);
-          const transportLines = pdf.splitTextToSize(`→ ${activity.transport}`, contentWidth - 10);
-          transportLines.forEach((line: string) => { checkNewPage(5); pdf.text(line, margin + 10, y); y += 4; });
+          pdf.text(`→ ${activity.transport}`, margin + 10, y);
+          y += 4;
         }
         if (activity.reservation && activity.reservation !== "Not needed" && activity.reservation !== "Walk-in OK") {
           pdf.setFontSize(9);
-          pdf.setFont("helvetica", "normal");
           pdf.setTextColor(220, 38, 38);
           pdf.text(`⚠ ${activity.reservation}`, margin + 10, y);
           y += 4;
@@ -798,7 +859,6 @@ export default function ChatPage() {
       if (day.stayArea) {
         checkNewPage(8);
         pdf.setFontSize(9);
-        pdf.setFont("helvetica", "normal");
         pdf.setTextColor(79, 70, 229);
         pdf.text(`🏨 Stay: ${day.stayArea}`, margin + 5, y);
         y += 6;
@@ -812,7 +872,6 @@ export default function ChatPage() {
     pdf.save("japanwise-itinerary.pdf");
   };
 
-  // Progress calculation
   const requiredProgress = Math.min(currentPhase, REQUIRED_PHASES) / REQUIRED_PHASES * 60;
   const optionalProgress = currentPhase > REQUIRED_PHASES ? ((currentPhase - REQUIRED_PHASES) / (TOTAL_PHASES - REQUIRED_PHASES)) * 40 : 0;
   const progress = itinerary ? 100 : Math.round(requiredProgress + optionalProgress);
@@ -1002,24 +1061,13 @@ export default function ChatPage() {
                 <p className="text-stone-700">{tripInfo.mustDo.join(", ")}</p>
               </div>
             )}
-            {(tripInfo.japanExperience || tripInfo.pace || tripInfo.foodStyle) && (
-              <div className="p-4 bg-stone-50 rounded-xl border border-stone-200">
-                <div className="text-sm text-stone-500 space-y-1">
-                  {tripInfo.japanExperience && <p>Experience: {tripInfo.japanExperience}</p>}
-                  {tripInfo.pace && <p>Pace: {tripInfo.pace}</p>}
-                  {tripInfo.foodStyle && <p>Food: {tripInfo.foodStyle}</p>}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       );
     }
 
-    // ===== ITINERARY VIEW WITH TABS =====
     return (
       <div className="h-full flex flex-col">
-        {/* Header with Tabs */}
         <div className="p-4 border-b border-stone-200">
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -1030,7 +1078,6 @@ export default function ChatPage() {
               <FileDown className="w-3.5 h-3.5" /> PDF
             </button>
           </div>
-          {/* View Toggle */}
           <div className="flex bg-stone-100 rounded-lg p-1">
             <button onClick={() => setPanelView("list")} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-colors ${panelView === "list" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700"}`}>
               <List className="w-4 h-4" /> List
@@ -1041,10 +1088,8 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Content */}
         {panelView === "map" ? (
           <div className="flex-1 flex flex-col">
-            {/* Day Filter */}
             <div className="p-3 border-b border-stone-100 flex gap-2 overflow-x-auto">
               <button onClick={() => setSelectedMapDay(null)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${selectedMapDay === null ? "bg-amber-500 text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>
                 All Days
@@ -1055,7 +1100,6 @@ export default function ChatPage() {
                 </button>
               ))}
             </div>
-            {/* Map */}
             <div className="flex-1 p-3">
               <ItineraryMap itinerary={itinerary} selectedDay={selectedMapDay} />
             </div>
@@ -1114,7 +1158,29 @@ export default function ChatPage() {
                 {day.stayArea && <div className="ml-4 pl-4 text-xs text-indigo-600">🏨 Stay: {day.stayArea}</div>}
               </div>
             ))}
-            {itinerary.tips && itinerary.tips.length > 0 && (
+            
+            {/* Pro Tips Section - Structured */}
+            {itinerary.proTips && Object.keys(itinerary.proTips).length > 0 && (
+              <div className="p-3 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200">
+                <h3 className="font-semibold text-amber-800 mb-3 text-sm flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" /> Pro Tips for Your Trip
+                </h3>
+                <div className="space-y-2.5">
+                  {Object.entries(itinerary.proTips).map(([key, value]) => value && (
+                    <div key={key} className="flex items-start gap-2.5 bg-white/60 rounded-lg p-2">
+                      <ProTipIcon type={key as keyof ProTips} />
+                      <div>
+                        <p className="text-xs font-medium text-stone-700">{PRO_TIP_LABELS[key as keyof ProTips]}</p>
+                        <p className="text-xs text-stone-600">{value}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Fallback to old tips format */}
+            {!itinerary.proTips && itinerary.tips && itinerary.tips.length > 0 && (
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
                 <h3 className="font-semibold text-amber-800 mb-2 text-sm">Pro Tips</h3>
                 <ul className="space-y-1.5">
